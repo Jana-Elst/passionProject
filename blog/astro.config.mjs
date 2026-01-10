@@ -7,6 +7,6 @@ import sitemap from '@astrojs/sitemap';
 import { defineConfig } from 'astro/config'
 
 export default defineConfig({
-	site: 'https://www.janaelst.be/passionProject',
+	site: 'https://www.janaelst.be/',
 	integrations: [mdx(), sitemap()],
 })
