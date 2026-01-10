@@ -8,5 +8,6 @@ import { defineConfig } from 'astro/config'
 
 export default defineConfig({
 	site: 'https://www.janaelst.be/',
+	base: '/passionProject',
 	integrations: [mdx(), sitemap()],
 })
