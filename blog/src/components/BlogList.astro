@@ -1,0 +1,68 @@
+---
+interface Props {
+    posts: any[];
+}
+
+const { posts } = Astro.props;
+
+import BlogCard from "./BlogCard.astro";
+---
+
+<style>
+    li + li {
+        margin-top: 3rem;
+    }
+
+    .container-year {
+        display: flex;
+        gap: var(--space-2xs);
+        margin-bottom: var(--space-2xs);
+        align-items: center;
+    }
+
+    .divider {
+        border-radius: 100px;
+        margin: 3px 0px;
+        flex-grow: 2;
+        height: 1px;
+        background-color: transparent;
+    }
+
+    .year {
+        font-weight: 100;
+        font-size: var(--fs-3);
+    }
+
+    .container-year + ul {
+        margin-bottom: var(--space-xl);
+    }
+
+    @media screen and (min-width: 41rem) {
+        ul {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            column-gap: var(--space-s);
+            row-gap: var(--space-l);
+        }
+
+        li + li {
+            margin-top: 0rem;
+        }
+    }
+
+    @media screen and (min-width: 66rem) {
+        ul {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+</style>
+
+<ul class="list">
+    {
+        posts.map((post) => (
+            <li>
+                <BlogCard post={post} />
+            </li>
+        ))
+    }
+</ul>
