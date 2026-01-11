@@ -13,42 +13,62 @@
 	--gray-dark: 34, 41, 57;
 	--gray-gradient: rgba(var(--gray-light), 50%), #fff;
 	--box-shadow:
-		0 2px 6px rgba(var(--gray), 25%), 0 8px 24px rgba(var(--gray), 33%), 0 16px 32px
-		rgba(var(--gray), 33%);
+		0 2px 6px rgba(var(--gray), 25%), 0 8px 24px rgba(var(--gray), 33%), 0 16px 32px rgba(var(--gray), 33%);
+
+	/* **** my style **** */
+
+	--color-black: #191A23;
+	--color-grey: #EFEFEF;
+
+	--color-text: var(--color-black);
+	--bg-color: var(--color-grey);
+
+	--fs--1: 0.875rem;
+	--fs-0: 1rem;
+	--fs-1: 1.125rem;
+	--fs-2: 1.75rem;
+	--fs-3: 2rem;
+	--fs-4: clamp(3rem, 1.5401rem + 5.4321vw, 5.75rem);
+
+	--space-4xs: clamp(0.125rem, 0.0815rem + 0.2174vw, 0.25rem);
+	--space-3xs: clamp(0.3125rem, 0.2038rem + 0.5435vw, 0.625rem);
+	--space-2xs: clamp(0.5rem, 0.3261rem + 0.8696vw, 1rem);
+	--space-xs: clamp(0.75rem, 0.4891rem + 1.3043vw, 1.5rem);
+	--space-s: clamp(1rem, 0.6522rem + 1.7391vw, 2rem);
+	--space-m: clamp(1.5rem, 0.9783rem + 2.6087vw, 3rem);
+	--space-l: clamp(2rem, 1.3043rem + 3.4783vw, 4rem);
+	--space-xl: clamp(3rem, 1.9565rem + 5.2174vw, 6rem);
+	--space-2xl: clamp(4rem, 2.6087rem + 6.9565vw, 8rem);
+	--space-3xl: clamp(6rem, 3.913rem + 10.4348vw, 12rem);
+
+	--line-height: 150%;
+	--max-width: 92rem;
+
 }
-@font-face {
-	font-family: "Atkinson";
-	src: url("/fonts/atkinson-regular.woff") format("woff");
-	font-weight: 400;
-	font-style: normal;
-	font-display: swap;
-}
-@font-face {
-	font-family: "Atkinson";
-	src: url("/fonts/atkinson-bold.woff") format("woff");
-	font-weight: 700;
-	font-style: normal;
-	font-display: swap;
-}
+
 body {
-	font-family: "Atkinson", sans-serif;
+	font-family: Inter, sans-serif;
+	font-size: var(--fs-1);
+	font-feature-settings: 'liga' 1, 'calt' 1, "cv11" on;
+	line-height: var(--line-height);
+	font-weight: 400;
+	background-color: var(--bg-color);
+	color: var(--color-text);
+
 	margin: 0;
 	padding: 0;
 	text-align: left;
-	background: linear-gradient(var(--gray-gradient)) no-repeat;
-	background-size: 100% 600px;
 	word-wrap: break-word;
 	overflow-wrap: break-word;
-	color: rgb(var(--gray-dark));
-	font-size: 20px;
-	line-height: 1.7;
 }
+
 main {
-	width: 720px;
+	/* width: 720px;
 	max-width: calc(100% - 2em);
 	margin: auto;
-	padding: 3em 1em;
+	padding: 3em 1em; */
 }
+
 h1,
 h2,
 h3,
@@ -56,81 +76,143 @@ h4,
 h5,
 h6 {
 	margin: 0 0 0.5rem 0;
-	color: rgb(var(--black));
-	line-height: 1.2;
+	color: var(--color-text);
+	line-height: var(--line-height);
 }
+
 h1 {
 	font-size: 3.052em;
 }
+
 h2 {
 	font-size: 2.441em;
 }
+
 h3 {
 	font-size: 1.953em;
 }
+
 h4 {
 	font-size: 1.563em;
 }
+
 h5 {
 	font-size: 1.25em;
 }
+
 strong,
 b {
 	font-weight: 700;
 }
+
 a {
-	color: var(--accent);
+	color: var(--color-text);
+	text-decoration: none;
+	position: relative;
+	padding-bottom: 0.1rem;
 }
-a:hover {
-	color: var(--accent);
+
+a::after {
+	content: "";
+	position: absolute;
+	width: 100%;
+	transform: scaleX(1);
+	height: 1px;
+	bottom: 0;
+	left: 0;
+	background-color: var(--color-text);
+	transform-origin: bottom left;
+	transition: transform 0.25s ease-out;
 }
+
+a:hover::after {
+	animation: swipe 0.5s ease-in-out forwards;
+}
+
+@keyframes swipe {
+	0% {
+		transform: scaleX(1);
+		transform-origin: bottom right;
+	}
+
+	50% {
+		transform: scaleX(0);
+		transform-origin: bottom right;
+	}
+
+	51% {
+		transform: scaleX(0);
+		transform-origin: bottom left;
+	}
+
+	100% {
+		transform: scaleX(1);
+		transform-origin: bottom left;
+	}
+}
+
 p {
-	margin-bottom: 1em;
+	margin-bottom: 0;
 }
+
 .prose p {
 	margin-bottom: 2em;
 }
+
+p+p {
+	margin-top: 1em;
+}
+
 textarea {
 	width: 100%;
 	font-size: 16px;
 }
+
 input {
 	font-size: 16px;
 }
+
 table {
 	width: 100%;
 }
+
 img {
 	max-width: 100%;
 	height: auto;
-	border-radius: 8px;
 }
+
 code {
 	padding: 2px 5px;
 	background-color: rgb(var(--gray-light));
 	border-radius: 2px;
 }
+
 pre {
 	padding: 1.5em;
 	border-radius: 8px;
 }
-pre > code {
+
+pre>code {
 	all: unset;
 }
+
 blockquote {
 	border-left: 4px solid var(--accent);
 	padding: 0 0 0 20px;
 	margin: 0;
 	font-size: 1.333em;
 }
+
 hr {
 	border: none;
 	border-top: 1px solid rgb(var(--gray-light));
 }
+
 @media (max-width: 720px) {
 	body {
 		font-size: 18px;
 	}
+
 	main {
 		padding: 1em;
 	}

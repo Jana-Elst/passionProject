@@ -15,12 +15,59 @@ const isActive =
 	<slot />
 </a>
 <style>
-	a {
-		display: inline-block;
-		text-decoration: none;
+	a::after {
+		background-color: black;
+		transform: scaleX(0);
 	}
-	a.active {
-		font-weight: bolder;
-		text-decoration: underline;
+
+	a:hover::after {
+		animation: swipe 0.5s ease-in-out forwards;
+	}
+
+	@keyframes swipe {
+		0% {
+			transform: scaleX(0);
+			transform-origin: bottom left;
+		}
+
+		100% {
+			transform: scaleX(1);
+			transform-origin: bottom left;
+		}
+	}
+
+	a:hover::after,
+	a:focus::after {
+		width: 100%;
+	}
+
+	a.active::after {
+		transform: scaleX(1);
+	}
+
+	a.active:hover::after {
+		animation: swipeActive 0.5s ease-in-out forwards;
+	}
+
+	@keyframes swipeActive {
+		0% {
+			transform: scaleX(1);
+			transform-origin: bottom right;
+		}
+
+		50% {
+			transform: scaleX(0);
+			transform-origin: bottom right;
+		}
+
+		51% {
+			transform: scaleX(0);
+			transform-origin: bottom left;
+		}
+
+		100% {
+			transform: scaleX(1);
+			transform-origin: bottom left;
+		}
 	}
 </style>

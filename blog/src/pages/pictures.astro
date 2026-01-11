@@ -1,0 +1,67 @@
+---
+import BaseHead from "../components/BaseHead.astro";
+import Footer from "../components/Footer.astro";
+
+import Header from "../components/Header.astro";
+import { SITE_DESCRIPTION, SITE_TITLE } from "../consts";
+import { Image } from "astro:assets";
+
+const images = import.meta.glob<{ default: ImageMetadata }>(
+    "/src/assets/pictures/*.{jpeg,jpg,png,gif}",
+);
+---
+
+<style>
+    main {
+        margin: 0 var(--space-m);
+    }
+
+    h2 {
+        font-size: var(--fs-4);
+        font-weight: 200;
+        margin: var(--space-m) 0;
+        padding: 0;
+
+        text-align: center;
+    }
+
+    .image-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .image-grid li img {
+        width: 100%;
+        height: auto;
+        border-radius: 8px;
+        display: block;
+    }
+</style>
+
+<html lang="en">
+    <head>
+        <BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
+    </head>
+    <body>
+        <Header />
+        <main>
+            <h2>Pictures</h2>
+            <section>
+                <ul class="image-grid">
+                    {
+                        Object.values(images).map((image) => (
+                            <li>
+                                <Image src={image()} alt="" />
+                            </li>
+                        ))
+                    }
+                </ul>
+            </section>
+        </main>
+        <Footer />
+    </body>
+</html>

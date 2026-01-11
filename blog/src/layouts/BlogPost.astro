@@ -1,56 +1,127 @@
 ---
-import { Image } from 'astro:assets';
-import type { CollectionEntry } from 'astro:content';
-import BaseHead from '../components/BaseHead.astro';
-import Footer from '../components/Footer.astro';
-import FormattedDate from '../components/FormattedDate.astro';
-import Header from '../components/Header.astro';
+import { Image } from "astro:assets";
+import { getCollection, type CollectionEntry } from "astro:content";
+import BaseHead from "../components/BaseHead.astro";
+import Footer from "../components/Footer.astro";
+import FormattedDate from "../components/FormattedDate.astro";
+import Header from "../components/Header.astro";
+import Button from "../components/Button.astro";
 
-type Props = CollectionEntry<'blog'>['data'];
+type Props = CollectionEntry<"blog">["data"];
 
 const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
+
+const posts = (await getCollection("blog")).sort(
+	(a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+);
+
+const { slug } = Astro.params;
+const currentPostIndex = posts.findIndex((post) => post.id === slug);
+
+const nextPost = posts[currentPostIndex - 1];
+const prevPost = posts[currentPostIndex + 1];
 ---
 
 <html lang="en">
 	<head>
 		<BaseHead title={title} description={description} />
 		<style>
-			main {
-				width: calc(100% - 2em);
-				max-width: 100%;
-				margin: 0;
+			.top {
+				display: grid;
+				grid-auto-flow: row;
+				margin: 0 var(--space-m);
+				margin-bottom: var(--space-xl);
 			}
-			.hero-image {
-				width: 100%;
-			}
-			.hero-image img {
-				display: block;
-				margin: 0 auto;
-				border-radius: 12px;
-				box-shadow: var(--box-shadow);
-			}
-			.prose {
-				width: 720px;
-				max-width: calc(100% - 2em);
-				margin: auto;
-				padding: 1em;
-				color: rgb(var(--gray-dark));
-			}
-			.title {
-				margin-bottom: 1em;
-				padding: 1em 0;
+
+			.intro {
+				margin: 6rem 0rem;
+
+				justify-self: center;
 				text-align: center;
-				line-height: 1;
+				max-width: 66.66%;
+
+				font-size: var(--fs-2);
+				font-weight: 200;
+				line-height: 140%;
+
+				grid-area: intro;
 			}
-			.title h1 {
-				margin: 0 0 0.5em 0;
+
+			.tags {
+				font-size: var(--fs-0);
+				font-weight: 300;
+				display: flex;
+				/* margin: var(--space-s); */
+				margin-top: 0rem;
+				justify-content: space-between;
+
+				grid-area: tags;
 			}
-			.date {
-				margin-bottom: 0.5em;
-				color: rgb(var(--gray));
+
+			.title {
+				font-size: var(--fs-4);
+				font-weight: 600;
+				line-height: 110%;
+				text-transform: uppercase;
+				margin-bottom: 0.5rem;
+				padding-top: 0.5rem;
+
+				grid-area: title;
 			}
-			.last-updated-on {
-				font-style: italic;
+
+			.image--header {
+				height: 70dvh;
+				width: 100%;
+				object-fit: cover;
+
+				grid-area: img;
+			}
+
+			.content {
+				max-width: 70%;
+				margin: 0 auto;
+			}
+
+			.button--top {
+				grid-area: button;
+				/* margin-left: var(--space-s); */
+				padding-top: 0.125rem;
+			}
+
+			.buttons--bottom {
+				display: flex;
+				justify-content: space-between;
+				margin: var(--space-m);
+			}
+
+			@media screen and (min-width: 48rem) {
+				.top {
+					display: grid;
+					grid-template-columns: minmax(33.33%, 40%) 1fr min-content;
+					margin: 0 var(--space-m);
+
+					grid-template-areas:
+						"button . ."
+						"img img img"
+						"title title tags"
+						"intro intro intro"
+						". links links"
+						"img--content img--content img--content";
+				}
+
+				.tags {
+					flex-direction: column;
+					text-wrap: nowrap;
+					justify-content: flex-end;
+					margin: 0;
+					margin-bottom: 0.3rem;
+				}
+
+				.title {
+					margin: 0;
+					padding: 0;
+					margin-top: var(--space-m);
+				}
 			}
 		</style>
 	</head>
@@ -58,28 +129,78 @@ const { title, description, pubDate, updatedDate, heroImage } = Astro.props;
 	<body>
 		<Header />
 		<main>
-			<article>
-				<div class="hero-image">
-					{heroImage && <Image width={1020} height={510} src={heroImage} alt="" />}
+			<div class="top">
+				<div class="button button--top">
+					<Button btnText="back" btnFunction="back" />
 				</div>
-				<div class="prose">
-					<div class="title">
-						<div class="date">
-							<FormattedDate date={pubDate} />
-							{
-								updatedDate && (
-									<div class="last-updated-on">
-										Last updated on <FormattedDate date={updatedDate} />
-									</div>
-								)
-							}
-						</div>
-						<h1>{title}</h1>
-						<hr />
+
+				{
+					heroImage && (
+						<Image
+							width={1020}
+							height={510}
+							src={heroImage}
+							alt=""
+							class="image image--header"
+						/>
+					)
+				}
+
+				<h1 class="title">{title}</h1>
+
+				<div class="tags">
+					<div>
+						<FormattedDate date={pubDate} />
+						{
+							updatedDate && (
+								<div class="last-updated-on">
+									Last updated on{" "}
+									<FormattedDate date={updatedDate} />
+								</div>
+							)
+						}
 					</div>
-					<slot />
 				</div>
-			</article>
+
+				<p class="intro">
+					{description}
+				</p>
+			</div>
+
+			<div class="content">
+				<slot />
+			</div>
+
+			<div class="buttons buttons--bottom">
+				{
+					nextPost ? (
+						<Button
+							btnText="next post"
+							btnURL={
+								import.meta.env.BASE_URL +
+								`/blog/${nextPost.id}/`
+							}
+							btnFunction="next"
+						/>
+					) : (
+						<div />
+					)
+				}
+				{
+					prevPost ? (
+						<Button
+							btnText="previous post"
+							btnURL={
+								import.meta.env.BASE_URL +
+								`/blog/${prevPost.id}/`
+							}
+							btnFunction="prev"
+						/>
+					) : (
+						<div />
+					)
+				}
+			</div>
 		</main>
 		<Footer />
 	</body>

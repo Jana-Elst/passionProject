@@ -1,0 +1,202 @@
+---
+const { btnText, btnURL, btnFunction } = Astro.props;
+---
+
+<style>
+    div {
+        margin: 1rem 0;
+        font-weight: 300;
+    }
+
+    div a {
+        text-decoration: none;
+        color: var(--text-color);
+    }
+
+    a::after {
+        background-color: transparent;
+    }
+
+    .btn--back::before {
+        font-family: Inter;
+        content: "←";
+        padding-right: 0.5rem;
+    }
+
+    .btn--link {
+        /* border-bottom: 1px solid black;
+        padding-bottom: 0.1rem; */
+    }
+
+    .btn--link::after {
+        font-family: Inter;
+        content: "↗︎";
+        padding-left: 0.5rem;
+        font-size: 1.5rem;
+        font-weight: 200;
+
+        /* Reset global a::after styles */
+        position: static;
+        width: auto;
+        height: auto;
+        transform: none;
+        background-color: transparent;
+    }
+
+    .btn--prev::after {
+        content: "→";
+    }
+
+    .btn--next::before {
+        font-family: Inter;
+        content: "←";
+        padding-left: 0.5rem;
+        font-size: 1.5rem;
+        font-weight: 200;
+
+        /* Reset global a::after styles */
+        position: static;
+        width: auto;
+        height: auto;
+        transform: none;
+        background-color: transparent;
+    }
+
+    .btn--top,
+    .btn--back {
+        background-color: transparent;
+        padding: 0;
+        color: var(--text-color);
+        font-weight: 300;
+        font-size: var(--fs-1);
+        border: none;
+    }
+
+    .btn--top {
+        /* border-bottom: 1px solid black; */
+        padding-bottom: 0.1rem;
+    }
+
+    .container__btn---link {
+        position: relative;
+        outline: none !important;
+        transition: 0.3s ease;
+    }
+
+    .container__btn---link::after {
+        content: "";
+        background-color: black;
+        position: absolute;
+        bottom: 0;
+        right: 0%;
+        height: 1px;
+        width: 100%;
+        /* transition: 0.2s; */
+    }
+
+    .container__btn---link:hover::after,
+    .container__btn---link:focus::after {
+        animation: line 1.2s ease;
+        animation-direction: normal;
+    }
+
+    .btn--back {
+        /* Additional styling */
+        position: relative;
+        outline: none !important;
+        transition: 1.2s;
+    }
+
+    .btn--back::after {
+        content: "";
+        background-color: black;
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        height: 1px;
+        width: 0;
+        transition: 0.2s;
+    }
+
+    .btn--back:hover::after,
+    .btn--back:focus::after {
+        width: 100%;
+    }
+
+    @keyframes line {
+        0% {
+            width: 100%;
+            right: 0%;
+        }
+        25% {
+            width: 0%;
+            right: 0%;
+        }
+        50% {
+            width: 0%;
+            right: 100%;
+        }
+
+        75% {
+            width: 100%;
+            right: 0%;
+        }
+
+        100% {
+            width: 100%;
+            right: 0%;
+        }
+    }
+</style>
+
+<div>
+    {
+        btnFunction === "back" ? (
+            <button class="btn--back">{btnText}</button>
+        ) : btnFunction === "link" ? (
+            <span class="container__btn---link">
+                <a class="btn--link" href={btnURL} target="_blank">
+                    {btnText}
+                </a>
+            </span>
+        ) : btnFunction === "link-internal" ? (
+            <span class="container__btn---link">
+                <a class="btn--link" href={btnURL}>
+                    {btnText}
+                </a>
+            </span>
+        ) : btnFunction === "top" ? (
+            <div class="container__btn---link">
+                <button class="btn--top">{btnText}</button>
+            </div>
+        ) : btnFunction === "prev" ? (
+            <a class="btn--link btn--prev" href={btnURL}>
+                {btnText}
+            </a>
+        ) : btnFunction === "next" ? (
+            <a class="btn--next" href={btnURL}>
+                {btnText}
+            </a>
+        ) : (
+            <a href={btnURL}>{btnText}</a>
+        )
+    }
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const buttonTop = document.querySelector(".btn--top");
+        const buttonBack = document.querySelector(".btn--back");
+
+        const handleScrollToTop = () => {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        };
+
+        const handleBack = () => {
+            window.history.back();
+        };
+
+        buttonTop?.addEventListener("click", handleScrollToTop);
+        buttonBack?.addEventListener("click", handleBack);
+    });
+</script>
