@@ -1,7 +1,7 @@
 ---
 title: '#1 Briefing & concept ideation'
 description: '3, 2, 1 ... START!'
-pubDate: 'Jan 4 2025'
+pubDate: 'Jan 4 2026'
 heroImage: '../../assets/blog-placeholder-3.jpg'
 links: 
     - { title: 'Passion Project Research', url: 'https://www.figma.com/board/GRPQDEXH0DziOyojPpeU3K/Passion-project?node-id=0-1&t=wYFw55gLV2Dch4ZR-1' }

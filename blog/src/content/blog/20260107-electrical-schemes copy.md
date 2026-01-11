@@ -1,9 +1,9 @@
 ---
-title: '#4 Making simulations'
+title: '#5 Making simulations'
 description: |
   Fried an arduino and a lot of capacitors...
   (in the virtual world)
-pubDate: 'Jan 7 2025'
+pubDate: 'Jan 7 2026'
 heroImage: '../../assets/blog-placeholder-3.jpg'
 sources:
 
