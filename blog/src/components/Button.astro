@@ -43,6 +43,25 @@ const { btnText, btnURL, btnFunction } = Astro.props;
         background-color: transparent;
     }
 
+    .btn--prev::after {
+        content: "→";
+    }
+
+    .btn--next::before {
+        font-family: Inter;
+        content: "←";
+        padding-left: 0.5rem;
+        font-size: 1.5rem;
+        font-weight: 200;
+
+        /* Reset global a::after styles */
+        position: static;
+        width: auto;
+        height: auto;
+        transform: none;
+        background-color: transparent;
+    }
+
     .btn--top,
     .btn--back {
         background-color: transparent;
@@ -150,6 +169,14 @@ const { btnText, btnURL, btnFunction } = Astro.props;
             <div class="container__btn---link">
                 <button class="btn--top">{btnText}</button>
             </div>
+        ) : btnFunction === "prev" ? (
+            <a class="btn--link btn--prev" href={btnURL}>
+                {btnText}
+            </a>
+        ) : btnFunction === "next" ? (
+            <a class="btn--next" href={btnURL}>
+                {btnText}
+            </a>
         ) : (
             <a href={btnURL}>{btnText}</a>
         )
