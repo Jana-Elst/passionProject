@@ -129,6 +129,19 @@ const prevPost = posts[currentPostIndex + 1];
 				margin-top: var(--space-s);
 			}
 
+			:global(.image-center) {
+				text-align: center;
+				margin-top: var(--space-m);
+			}
+
+			:global(.image-center img) {
+				width: auto;
+				height: 50vh;
+				object-fit: contain;
+				break-inside: avoid;
+				margin-bottom: var(--space-s);
+			}
+
 			:global ol {
 				list-style: decimal;
 				margin-left: 1.5rem;
