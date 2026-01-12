@@ -4,7 +4,7 @@ description: |
   Fried an arduino and a lot of capacitors...
   (in the virtual world)
 pubDate: 'Jan 7 2026'
-heroImage: '../../assets/blog-placeholder-3.jpg'
+heroImage: '../../assets/notes/20260107-no-connection-between-phones.png'
 sources:
 
 gemini: 
@@ -30,12 +30,16 @@ I also tried to simulate the bells, but that failed for now. I’ll have to give
 
 ## sound loop, no connection between phones
 
-ADDDD IMAGE
+![](../../assets/notes/20260107-no-connection-between-phones.png)
 
 This circuit exist out of a arduino, the telephone (voorgesteld als een weerstand van 0.3k𝛺), a capacitor, and 2 resistors (one of 330𝛺 and one of 1k𝛺). The 1k𝛺 resistor is used to limit the current to the arduino, and the 330𝛺 resistor is used to set the volume. Picking a heavier resistor will result in a lower volume.
 The capacitor acts like a sort of wall. It blocks the DC current, but allows the AC current, that creates the sound, to pass.
 
+[Find the simulation here ->](https://www.tinkercad.com/things/2BNsrL1ljib-sound-loops-arduino-no-connection-between-phones)
+
 ## sound loop, connection between phones
-ADDDDD IMAGE
+![](../../assets/notes/20260107-connection-between-phones.png)
 
 To connect the two phones and allow the Arduino's audio to pass through, I added a relay to merge the sound loop with the intercom circuit.
+
+[Find the simulation here ->](https://www.tinkercad.com/things/3fBIcnZGZkq-copy-of-sound-loops-arduino-connection-between-phones)

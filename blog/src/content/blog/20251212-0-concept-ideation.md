@@ -2,16 +2,16 @@
 title: '#1 Briefing & concept ideation'
 description: '3, 2, 1 ... START!'
 pubDate: 'Jan 4 2026'
-heroImage: '../../assets/blog-placeholder-3.jpg'
+heroImage: '../../assets/pictures/20260104-header.png'
 links: 
     - { title: 'Passion Project Research', url: 'https://www.figma.com/board/GRPQDEXH0DziOyojPpeU3K/Passion-project?node-id=0-1&t=wYFw55gLV2Dch4ZR-1' }
+    - { title: 'Concept Pitch', url: 'https://www.figma.com/board/GRPQDEXH0DziOyojPpeU3K/Passion-project?node-id=0-1&t=wYFw55gLV2Dch4ZR-1' }
 ---
 So, this is it... My very last school project. For my Passion Project, I have five weeks to basically do whatever I want in the world of creative development.
 
 I did a lot of brainstorming and research to find something I really want to work on for five weeks straight. One thing was really clear to me: I want to work with physical objects & code. Since my previous study, Industrial Design, was all about physical products and my current study, Devine, is all about digital products, it feels right to combine both in my last school project ever.
 
-I spent a lot of time figuring out exactly what I wanted to do. You can check out my (messy) research here: <br>
-<a href="https://www.figma.com/board/GRPQDEXH0DziOyojPpeU   3K/Passion-project?node-id=0-1&t=wYFw55gLV2Dch4ZR-1" target="_blank">-> Passion Project Research</a>
+I spent a lot of time figuring out exactly what I wanted to do. You can check out my (messy) research here: <a href="https://www.figma.com/board/GRPQDEXH0DziOyojPpeU   3K/Passion-project?node-id=0-1&t=wYFw55gLV2Dch4ZR-1" target="_blank">Passion Project Research</a>
 
 After a lot of thinking, I ended up with this research question:
 
