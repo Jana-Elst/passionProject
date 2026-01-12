@@ -18,6 +18,8 @@ The first step of the day is creating a shopping list. Otherwise, I would end up
 ### From 230V AC to 9V DC
 Since my bells ring on AC and the talking loop of my phone works on 9V DC, and I don’t want to deal with multiple sockets or batteries, I need to create a circuit that can convert 230V AC to 9V DC.
 
+
+
 #### Step 1: Stepping down the voltage 230V AC -> 24V AC
 I want to power my project from a standard wall socket (230V AC). To step down the voltage, I need a transformer. I’m using an Ezviz EZ030 transformer.
 
@@ -41,6 +43,6 @@ To make the talking circuit work, I need:
 The transistor handles the higher current needed by the relay, while the diode protects the components from damaging back-EMF voltage spikes (a high-voltage spike that occurs when the power to an inductor (like the coil inside a relay) is suddenly cut off).
 
 ## Building the arduino sound circuit
-Now I have all the needed components, I can start building my sound circuit. The first thing I wanted to test was if I actually can play some music from my arduino into my phone. Everything about sending sound from my arduino to the phones is writen down in this [post]().
+Now I have all the needed components, I can start building my sound circuit. The first thing I wanted to test was if I actually can play some music from my arduino into my phone. Everything about sending sound from my arduino to the phones is writen down in this [post](www.janaelst.be/passionProject/blog/20260110-music/).
 
 But at the end of today I could play 2 seconds of music!
