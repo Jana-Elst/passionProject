@@ -86,10 +86,12 @@ h1 {
 
 h2 {
 	font-size: 2.441em;
+	margin-top: var(--space-m);
 }
 
 h3 {
 	font-size: 1.953em;
+	margin-top: var(--space-s);
 }
 
 h4 {
@@ -151,6 +153,10 @@ a:hover::after {
 	}
 }
 
+em {
+	font-style: italic;
+}
+
 p {
 	margin-bottom: 0;
 }
@@ -197,10 +203,12 @@ pre>code {
 }
 
 blockquote {
-	border-left: 4px solid var(--accent);
-	padding: 0 0 0 20px;
-	margin: 0;
-	font-size: 1.333em;
+	font-size: var(--fs-2);
+	font-weight: 300;
+	font-style: italic;
+	line-height: var(--line-height);
+	margin: var(--space-s) 0;
+	/* text-align: center; */
 }
 
 hr {
@@ -214,7 +222,7 @@ hr {
 	}
 
 	main {
-		padding: 1em;
+		/* padding: 1em; */
 	}
 }
 

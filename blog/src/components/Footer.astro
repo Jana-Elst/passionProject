@@ -8,7 +8,7 @@
         display: grid;
         grid-template-areas:
             "name name"
-            "contact contact"
+            "contact nav"
             "socials nav";
     }
 
@@ -75,6 +75,13 @@
 
     .socials {
         grid-area: socials;
+        list-style: none;
+        margin-left: 0rem;
+    }
+
+    .nav__list {
+        list-style: none;
+        margin-left: 0rem;
     }
 
     .name__title:hover {
@@ -135,7 +142,7 @@
         <li>
             <a
                 href="https://www.linkedin.com/in/jana-elst-9b9598207"
-                target="_blank">LinkdIn</a
+                target="_blank">LinkedIn</a
             >
         </li>
         <li>
@@ -149,21 +156,23 @@
     </ul>
 
     <nav class="nav">
-        <ul>
+        <ul class="nav__list">
             <li>
-                <a href="/blog">Blog</a>
+                <a href={import.meta.env.BASE_URL + "/blog"}>Blog</a>
             </li>
             <li>
-                <a href="/notes">Notes</a>
+                <a href={import.meta.env.BASE_URL + "/notes"}>Notes</a>
             </li>
             <li>
-                <a href="/pictures">Pictures</a>
+                <a href={import.meta.env.BASE_URL + "/pictures"}>Pictures</a>
             </li>
             <li>
-                <a href="/technicalOverview">Technical Overview</a>
+                <a href={import.meta.env.BASE_URL + "/technicalOverview"}
+                    >Technical Overview</a
+                >
             </li>
             <li>
-                <a href="/about">About</a>
+                <a href={import.meta.env.BASE_URL + "/about"}>About</a>
             </li>
         </ul>
     </nav>

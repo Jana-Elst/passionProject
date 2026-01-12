@@ -26,11 +26,24 @@ const prevPost = posts[currentPostIndex + 1];
 	<head>
 		<BaseHead title={title} description={description} />
 		<style>
+			:global(.link-end) {
+				/* display: block; */
+				text-align: right;
+			}
+
 			.top {
 				display: grid;
 				grid-auto-flow: row;
-				margin: 0 var(--space-m);
 				margin-bottom: var(--space-xl);
+
+				grid-template-areas:
+					"button button button"
+					"img img img"
+					"title title title"
+					"date date date"
+					"intro intro intro"
+					"links links links"
+					"img--content img--content img--content";
 			}
 
 			.intro {
@@ -48,18 +61,20 @@ const prevPost = posts[currentPostIndex + 1];
 				grid-area: intro;
 			}
 
-			.tags {
+			.date {
 				font-size: var(--fs-0);
 				font-weight: 300;
 				display: flex;
-				/* margin: var(--space-s); */
+				margin: var(--space-s);
 				margin-top: 0rem;
 				justify-content: space-between;
 
-				grid-area: tags;
+				grid-area: date;
 			}
 
 			.title {
+				margin: 0 var(--space-xs);
+
 				font-size: var(--fs-4);
 				font-weight: 600;
 				line-height: 110%;
@@ -79,13 +94,12 @@ const prevPost = posts[currentPostIndex + 1];
 			}
 
 			.content {
-				max-width: 70%;
-				margin: 0 auto;
+				margin: 0 var(--space-s);
 			}
 
 			.button--top {
 				grid-area: button;
-				/* margin-left: var(--space-s); */
+				margin-left: var(--space-s);
 				padding-top: 0.125rem;
 			}
 
@@ -95,22 +109,68 @@ const prevPost = posts[currentPostIndex + 1];
 				margin: var(--space-m);
 			}
 
+			:global(.note) {
+				display: flex;
+				flex-direction: column;
+				border: 1px solid var(--color-text);
+				color: var(--color-text);
+				padding: var(--space-xs);
+				margin-top: var(--space-m);
+			}
+
+			:global(.note)::before {
+				content: "Note";
+				font-weight: 600;
+				margin-bottom: 0.25rem;
+			}
+
+			:global(.image-grid) {
+				column-gap: var(--space-3xs);
+				margin-top: var(--space-s);
+			}
+
+			:global ol {
+				list-style: decimal;
+				margin-left: 1.5rem;
+			}
+
+			:global ul {
+				list-style: square;
+				margin-left: 1.5rem;
+			}
+
+			:global(.image-grid img) {
+				width: 100%;
+				height: auto;
+				break-inside: avoid;
+				margin-bottom: var(--space-s);
+			}
+
 			@media screen and (min-width: 48rem) {
 				.top {
 					display: grid;
 					grid-template-columns: minmax(33.33%, 40%) 1fr min-content;
 					margin: 0 var(--space-m);
+					column-gap: var(--space-xs);
 
 					grid-template-areas:
 						"button . ."
 						"img img img"
-						"title title tags"
+						"title title date"
 						"intro intro intro"
 						". links links"
 						"img--content img--content img--content";
 				}
 
-				.tags {
+				:global(.image-grid) {
+					columns: 2;
+				}
+
+				.button--top {
+					margin-left: 0;
+				}
+
+				.date {
 					flex-direction: column;
 					text-wrap: nowrap;
 					justify-content: flex-end;
@@ -122,6 +182,12 @@ const prevPost = posts[currentPostIndex + 1];
 					margin: 0;
 					padding: 0;
 					margin-top: var(--space-m);
+				}
+
+				.content {
+					width: calc(100% - 2 * var(--space-s));
+					max-width: 55rem;
+					margin: 0 auto;
 				}
 			}
 		</style>
@@ -149,7 +215,7 @@ const prevPost = posts[currentPostIndex + 1];
 
 				<h1 class="title">{title}</h1>
 
-				<div class="tags">
+				<div class="date">
 					<div>
 						<FormattedDate date={pubDate} />
 						{

@@ -26,12 +26,15 @@ const images = import.meta.glob<{ default: ImageMetadata }>(
     }
 
     .image-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 1rem;
-        list-style: none;
+        column-gap: var(--space-s);
         padding: 0;
         margin: 0;
+        list-style: none;
+    }
+
+    .image-grid li {
+        break-inside: avoid;
+        margin-bottom: var(--space-s);
     }
 
     .image-grid li img {
@@ -39,6 +42,12 @@ const images = import.meta.glob<{ default: ImageMetadata }>(
         height: auto;
         border-radius: 8px;
         display: block;
+    }
+
+    @media screen and (min-width: 48rem) {
+        .image-grid {
+            columns: 2;
+        }
     }
 </style>
 
