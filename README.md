@@ -32,6 +32,54 @@ This installation aims to break the "smartphone bubble" by using obsolete techno
 - **arduino**: the process of my arduino code
 - **blog**: the process of my blog
 
+## Planning
+### Week 1 (5 - 11 jan)
+**How does the telephone work? Create a basis setup.**
+- Are the phones working
+- How can I call with it?
+- Are the bells working?
+- Can I connect the two phones?
+- Can I send music from an arduino to the phone(s)?
+
+### Week 2 (12 - 18 jan)
+**Make the final hardware setup**
+- Create a user flow. -> Tuesday
+- Sound & talking circuit -> Tuesday
+    - Is the whole sound circuit working?
+    - Check what's wrong if two sounds are playing at the same time.
+    - Where is the noise coming from during the talking status?
+- Check if the phone is off hook. -> Tuesday/Wednesday
+- Voice mails -> Wednesday
+    - Can I make a voice mail?
+    - Can I play a voice mail?
+- The dail -> Thursday
+    - How does it work?
+    - Detect which number is dialed
+- The bells -> Friday
+    - Connect them to the circuit
+    - Let  the bells ring at the right moments
+
+### Week 3 (19 - 25 jan)
+**Write the software**
+- [ ] 
+
+### Week 4 (26 - 1 feb)
+**Scenografie + test the installation**
+- Solder everything together
+- Make a nice scenografie
+- Test the installation
+
+### Week 5 (2 - 8 feb)
+**Create presentation + final touches**
+- Create a presentation
+- Final touches
+
+### Week 6 (9 - 15 feb)
+**Presentation**
+- Create a presentation
+
+
+
 
 
 
