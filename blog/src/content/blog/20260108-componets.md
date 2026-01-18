@@ -3,7 +3,7 @@ title: '#6 Components, Components, Components'
 description: |
   Creating a shopping list for the electro shop isn't that easy.
 pubDate: 'Jan 8 2026'
-heroImage: '../../assets/blog-placeholder-3.jpg'
+heroImage: '../../assets/pictures/20260108-header.png'
 sources:
 
 gemini: 
