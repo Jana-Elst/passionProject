@@ -1,0 +1,32 @@
+---
+title: '#13 Raspberry Pi getting started'
+description: |
+    Mom, dad, I have a new computer!
+pubDate: 'Jan 17 2026'
+heroImage: ../../assets/pictures/20260117-header.png
+sources:
+
+gemini: 
+
+components: 
+
+links: 
+---
+import piGettingStarted from '../../assets/videos/20260117-pi-getting-started.MOV?url';
+
+## Install an OS
+Since a Pi is totally new form me, I followed some tutorials to get started.
+First of all, I needed to set up the Pi and install an OS on it. So I followed the documentation from the Raspberry Pi website: <a href="https://www.raspberrypi.com/documentation/computers/getting-started.html" target="_blank">Raspberry Pi getting started</a>.
+
+## Raspberry Pi x Arduino
+I don't only need a Pi, I need a connection between a Pi and my arduino.
+So to try this out, I followed this tutorial: <a href="https://www.instructables.com/Connect-Your-Raspberry-Pi-and-Arduino-Uno/" target="_blank">Connect Your Raspberry Pi and Arduino Uno</a>.
+
+<video width="100%" height="600" controls>
+  <source src={piGettingStarted} />
+</video>
+
+## Arduino IDE on Raspberry Pi
+Maybe it would be easy to just have the Arduino IDE right there on the Pi. That way, I can check the serial output and tweak things without constantly swapping my laptop in and out.
+
+To set it up, I followed this tutorial: <a href="https://youtu.be/KwOl3wfDB24" target="_blank">Install and Run Arduino IDE on Raspberry Pi</a>. Because I'm using an Arduino Nano 33 IoT, the IDE doesn't know what board it is yet. I have to install the board settings in the manager, but I’m stuck on how to do that... (Okay, maybe I just haven't put enough effort into it yet!)

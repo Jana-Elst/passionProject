@@ -12,6 +12,10 @@ components:
 
 links: 
 ---
+import toggleLights from '../../assets/videos/20260113-toggleLights.MOV?url';
+import alternateMusic from '../../assets/videos/20260113-alternateMusic.MOV?url';
+
+
 A few days ago, I put together several simulations [(find them in this post)](../20260107-electrical-schemes). However, I realized I was using the wrong relays in my simulation, or rather, I had bought the wrong ones in real life!
 
 Because of that, I had to design a <a href="https://www.tinkercad.com/things/hHAPCORA5sY-def-talking-sound" target="_blank">new circuit</a> using the correct relays.
@@ -32,6 +36,10 @@ For the first test, I wanted to confirm the relays were switching correctly. I u
 <a href="https://www.tinkercad.com/things/hHAPCORA5sY-def-talking-sound" target="_blank">Simulation circuit -></a>
 </div>
 
+<video width="100%" height="600" controls>
+  <source src={toggleLights} />
+</video>
+
 ## Second test
 To see if the circuit actually performs under load, I tested it with sound.
 
@@ -42,3 +50,7 @@ To see if the circuit actually performs under load, I tested it with sound.
 I initially tried to play two different songs at the same time, but the Arduino couldn't handle it. Instead, I programmed it to play one song and switch the output between the two phones every 5 seconds. This allowed me to verify that both phones were receiving the audio signal correctly.
 
 <a href="https://github.com/Jana-Elst/passionProject/blob/76cabe76a41d5c77681f602b0848094a610dc73e/arduinoTests/20260113_1_relaisPlay2Songs/20260113_1_relaisPlay2Songs.ino" target="_blank">Arduino code -></a>
+
+<video width="100%" height="600" controls>
+  <source src={alternateMusic} />
+</video>

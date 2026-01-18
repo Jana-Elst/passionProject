@@ -4,7 +4,7 @@ description: |
     How is this crazy little device working?
     Can I just replace my arduino with a raspberry pi?
 pubDate: 'Jan 15 2026'
-heroImage: ''
+heroImage: '../../assets/pictures/20260115-header.png'
 sources:
 
 gemini: 

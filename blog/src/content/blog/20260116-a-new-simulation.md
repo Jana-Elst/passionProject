@@ -4,7 +4,7 @@ description: |
     Three arduino's, one raspberry pi and a lot of wires.
     It looks a little bit overkill, but it works.
 pubDate: 'Jan 16 2026'
-heroImage: ''
+heroImage: ../../assets/notes/20260116-header.png
 sources:
 
 gemini: 
@@ -13,6 +13,12 @@ components:
 
 links: 
 ---
+<div class="image-center">
+
+![](../../assets/notes/20260116-header.png)
+
+</div>
+
 Before I dared to wire everything up for real, I built a <a href="https://www.tinkercad.com/things/1tOnQHB25g0-def-talking-sound-arduino-digital-to-analog" target="_blank">new simulation</a>. This version includes two extra Arduinos to act as a bridge between the Raspberry Pi and the telephones.
 
 These Arduinos have two main jobs:
