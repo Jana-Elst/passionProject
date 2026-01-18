@@ -35,33 +35,40 @@ This installation aims to break the "smartphone bubble" by using obsolete techno
 ## Planning
 ### Week 1 (5 - 11 jan)
 **How does the telephone work? Create a basis setup.**
-- Are the phones working
-- How can I call with it?
-- Are the bells working?
-- Can I connect the two phones?
-- Can I send music from an arduino to the phone(s)?
+- ~~Are the phones working~~
+- ~~How can I call with it~~
+- ~~Are the bells working~~
+- ~~Can I connect the two phones~~
+- ~~Can I send music from an arduino to the phone(s)~~
 
 ### Week 2 (12 - 18 jan)
 **Make the final hardware setup**
 - Create a user flow. -> Tuesday
-- Sound & talking circuit -> Tuesday
-    - Is the whole sound circuit working?
-    - Check what's wrong if two sounds are playing at the same time.
-    - Where is the noise coming from during the talking status?
+- ~~Sound & talking circuit -> Tuesday~~
+    - ~~Is the whole sound circuit working?~~
+    - ~~Check what's wrong if two sounds are playing at the same time.~~
+    - ~~Where is the noise coming from during the talking status?~~
 - Check if the phone is off hook. -> Tuesday/Wednesday
 - Voice mails -> Wednesday
     - Can I make a voice mail?
     - Can I play a voice mail?
-- The dail -> Thursday
-    - How does it work?
-    - Detect which number is dialed
+- ~~The dail -> Thursday~~
+    - ~~How does it work?~~
+    - ~~Detect which number is dialed~~
 - The bells -> Friday
     - Connect them to the circuit
     - Let  the bells ring at the right moments
 
 ### Week 3 (19 - 25 jan)
 **Write the software**
-- [ ] 
+- calculate the voltages, voltages spikes, and current in the whole circuit
+- write the whole arduino logic (Pro micro)
+- write the python code
+- add the dial to the circuit
+- detect on/off hook
+- connect the bells
+- write code to record a voice mail
+- find a workflow between the pi, and the code
 
 ### Week 4 (26 - 1 feb)
 **Scenografie + test the installation**
