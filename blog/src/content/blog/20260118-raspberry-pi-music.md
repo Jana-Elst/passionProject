@@ -1,9 +1,9 @@
 ---
-title: '#8 The wrong relays'
+title: '#14 '
 description: |
-    There exist more relays than I thought.
-pubDate: 'Jan 13 2026'
-heroImage: ''
+    xx
+pubDate: 'Jan 18 2026'
+heroImage: ../../assets/pictures/20260118-header.png
 sources:
 
 gemini: 
