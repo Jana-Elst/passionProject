@@ -15,16 +15,16 @@ links:
 ---
 I want to be able to play audio through the phones and record sound from them, sometimes at the same time for both phones. Doing all of this with a single Arduino isn't really possible because it can only handle one task at a time and lacks the processing power for high-quality audio. While I could add more Arduinos, it would still be a struggle with memory limits. So, I’ve decided to use a Raspberry Pi for the heavy lifting, while the Arduino continues to control the electrical components and relays.
 
-## The first pi steps
+## My first Pi steps
 Before I can start programming the Pi and connecting it to my Arduino, I need to understand how it works and what changes my circuit needs. My current circuit operates on 5V, but the Raspberry Pi uses 3.3V for its logic.
 
 The Pi has a set of GPIO pins, but honestly, I'm a bit nervous about using them, one wrong move could easily fry the board! Luckily, the Pi also comes with standard ports that are a bit more "plug-and-play," like several USB ports, an HDMI output, and a 3.5mm audio jack.
 
 ## How can I play sound?
-The most import thing why i'm using a pi is to play sound trough my phones with it.
+The most import thing why I'm using a Pi is to play sound trough my phones with it.
 
 ### 1. Using the 3.5mm audio jack output
-Using the s3.5mm audio jack output seemed like the easiest path. I would just need a jack with screw terminals to wire it into the circuit. Because the phones are mono, I could even split the stereo signal to play different sounds to each phone at the same time.
+Using the 3.5mm audio jack output seemed like the easiest path. I would just need a jack with screw terminals to wire it into the circuit. Because the phones are mono, I could even split the stereo signal to play different sounds to each phone at the same time.
 
 But I quickly realized a problem, the port is for output only and can't record. Since I need to record conversations, this option won't work.
 
@@ -38,4 +38,4 @@ After looking into it further, I realized where the real problem lies. A Raspber
 
 While there are specialized "shields" (HATs) to handle this, it’s actually a task an Arduino can perform. And since I have 2 Arduino Nano IOTs, I started wondering: can I use them as my converters?
 
-It turns out they can, as they have pins capable of simulating analog outputs. Is this the most "professional" or easiest solution? Definitely not. But since I already have the parts, it’s definitely the cheapest!
+It turns out they can, as they have pins capable of simulating analog outputs. Is this the easiest solution? Definitely not. But since I already have the parts, it’s definitely the cheapest!

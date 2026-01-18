@@ -12,7 +12,7 @@ components:
 
 links: 
 ---
-After a successful trial controlling LEDs on an Arduino from my Raspberry Pi, the next logical step was to increase the stakes: **sending music.** My goal is to use the Raspberry Pi as a central "brain" that stores audio files and streams them to multiple Arduinos. Each Arduino then acts as a signal converter for an old telephone handset. However, I quickly learned that "playing music" is fundamentally different from "switching a pin."
+After a successful trial controlling LEDs on an Arduino from my Raspberry Pi, the next logical step was to try to send music. My goal is to use the Raspberry Pi as a central "brain" that stores audio files and streams them to multiple Arduinos. Each Arduino then acts as a signal converter for an old telephone handset. However, I quickly learned that "playing music" is fundamentally different from "switching a pin."
 
 ### The Challenge: The Serial Bottleneck
 When you blink an LED, you send one byte and the job is done. When you stream audio, you are sending thousands of bytes every second. If the timing is off by even a few microseconds, the voice sounds like a slowed-down monster or a high-pitched chipmunk.
