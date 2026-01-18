@@ -22,7 +22,7 @@ import resistanceVideo from '../../assets/videos/20260106-resistance.MOV?url';
 import ringVideo from '../../assets/videos/20260106-ring.MOV?url';
 
 ## Creating an intercom
-Today I will create an intercom. By making this intercom I can check if the old rotary phones are still working. In my last post, I mentioned that these phones were originally powered by 48V DC, but I found out they can actually run on a much safer 9V battery. By creating a simple circuit with two phones and a 9V battery, you basically get a intercom.
+Today I will create an intercom. By making this intercom I can check if the old rotary phones are still working. In my [last post](../20260105-hardware), I mentioned that these phones were originally powered by 48V DC, but I found out they can actually run on a much safer 9V battery. By creating a simple circuit with two phones and a 9V battery, you basically get an intercom.
 
 But before I started plugging things in, I had to do some measuring.
 
@@ -45,7 +45,7 @@ It seems the old internal contacts just needed a little movement to wake up
 Essentially, "Off-hook" is like flipping a light switch to "ON." Once I saw that 0.3 k𝛺 on both phones, I knew the internal wiring was healthy enough to carry a voice.
 
 ### The circuit
-I connected the two phones in a loop with a 9V battery. I also added a 300𝛺 resistor in series, which is super important: it limits the current so I don't "fry" the old carbon microphones, and more importantly, it acts as an audio bridge. Without that resistor, the battery would actually "eat" the voice signal and you wouldn't hear anything.
+I connected the two phones in a loop with a 9V battery. I also added a 300𝛺 resistor in series, which is important: it limits the current so I don't "fry" the old carbon microphones, and more importantly, it acts as an audio bridge. Without that resistor, the battery would actually "eat" the voice signal and you wouldn't hear anything.
 
 <div class="image-center">
 

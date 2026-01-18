@@ -12,7 +12,7 @@ components:
 
 links: 
 ---
-## Creating a Shopping List
+## Creating a shopping list
 The first step of the day is creating a shopping list. Otherwise, I would end up at the electronics shop every single day.
 
 ### From 230V AC to 9V DC
@@ -54,6 +54,6 @@ To make the talking circuit work, I need:
 The transistor handles the higher current needed by the relay, while the diode protects the components from damaging back-EMF voltage spikes (a high-voltage spike that occurs when the power to an inductor (like the coil inside a relay) is suddenly cut off).
 
 ## Building the arduino sound circuit
-Now I have all the needed components, I can start building my sound circuit. The first thing I wanted to test was if I actually can play some music from my arduino into my phone. Everything about sending sound from my arduino to the phones is writen down in this [post](www.janaelst.be/passionProject/blog/20260110-music/).
+Now I have all the needed components, I can start building my sound circuit. The first thing I wanted to test was if I actually can play some music from my arduino into my phone. Everything about sending sound from my arduino to the phones is writen down in this [post](../20260110-music/).
 
 But at the end of today I could play 2 seconds of music!
