@@ -1,7 +1,7 @@
 ---
 title: '#9 The wrong relays'
 description: |
-  There exist more relays than I thought.
+  There exists more relays than I thought.
 pubDate: 'Jan 13 2026'
 heroImage: '../../assets/pictures/20260113-header.png'
 sources:
@@ -12,9 +12,9 @@ components:
 
 links: 
 ---
-A few days ago, I put together several simulations [(find them in this post)](www.janaelst.be/passionProject/blog/20260113-the-wrong-relays). However, I realized I was using the wrong relays in my simulation, or rather, I had bought the wrong ones in real life!
+A few days ago, I put together several simulations [(find them in this post)](../20260107-electrical-schemes). However, I realized I was using the wrong relays in my simulation, or rather, I had bought the wrong ones in real life!
 
-Because of that, I had to design a new circuit using the correct relays. [New circuit ->](www.janaelst.be/passionProject/blog/20260113-the-wrong-relays)
+Because of that, I had to design a <a href="https://www.tinkercad.com/things/hHAPCORA5sY-def-talking-sound" target="_blank">new circuit</a> using the correct relays.
 
 To verify that everything works, I added some LEDs. Since I’m using WPM406 relay modules, I don't need to add external transistors or flyback diodes to my physical circuit; they are already built into the modules.
 
@@ -25,9 +25,12 @@ For the first test, I wanted to confirm the relays were switching correctly. I u
 
 **Music Mode:** If the relays are triggered (Normally Open/NO state), one of the green LEDs should light up, depending on which phone is off-hook.
 
-[Arduino code ->](www.janaelst.be/passionProject/blog/20260113-the-wrong-relays)
-
-[Simulation circuit ->](www.janaelst.be/passionProject/blog/20260113-the-wrong-relays)
+<div>
+<a href="https://github.com/Jana-Elst/passionProject/blob/4ee055e18ab01e6d44ad3883bda0e69d9d9342ac/arduinoTests/20260112-1-testRelays/20260112-1-testRelays.ino" target="_blank">Arduino code -></a>
+</div>
+<div>
+<a href="https://www.tinkercad.com/things/hHAPCORA5sY-def-talking-sound" target="_blank">Simulation circuit -></a>
+</div>
 
 ## Second test
 To see if the circuit actually performs under load, I tested it with sound.
