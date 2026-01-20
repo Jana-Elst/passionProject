@@ -32,7 +32,7 @@
 // }
 
 //---------------------------------------------------------------------------------------------//
-const int dialPin = 6; 
+const int dialPin = A1; 
 int pulseCount = 0;
 int lastState = LOW;
 unsigned long lastPulseTime = 0;
