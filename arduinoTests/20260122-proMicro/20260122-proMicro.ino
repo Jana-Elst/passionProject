@@ -19,6 +19,8 @@ const int measurePinT2 = A2;
 #define T2 1
 
 //--- CONFIG
+const String DeviceName = "MAIN";
+
 struct PhoneConfig {
   int pickupThreshold;
   int hangupThreshold;
@@ -60,16 +62,52 @@ void setup() {
 
 //------------------------ LOOP ------------------------//
 void loop() {
+  //--- 0. Handshake
+  // this should loop till the handshake is done
+  while (!handshake()) {
+    delay(100);
+  }
+
+  //--- 1. Read the lines
   int valueT1 = analogRead(measurePinT1);
   int valueT2 = analogRead(measurePinT2);
 
-  //--- 1. Get all information from the lines
+  //--- 2. Get all information from the lines
   // On/off hook state & dialed digits
   processLine(valueT1, T1);
   processLine(valueT2, T2);
 
-  //--- 2. Control the Relay
+  //--- 3. Control the Relay
   controlRelay();
+}
+
+//------------------------ Give handshake to the PI ------------------------//
+bool handshake() {
+  if (Serial.available() > 0) {
+    String incoming = Serial.readStringUntil('\n');
+    incoming.trim(); // Remove any whitespace/newlines
+
+    // When the Pi asks "IDENTIFY", send back the name
+    if (incoming == "IDENTIFY") {
+      Serial.println(DeviceName);
+
+      //and send the current state of the lines
+      if (phoneStates[T1].isOffHook) {
+        Serial.println("T1_OFFH");
+      } else {
+        Serial.println("T1_ONH");
+      }
+      if (phoneStates[T2].isOffHook) {
+        Serial.println("T2_OFFH");
+      } else {
+        Serial.println("T2_ONH");
+      }
+
+      return true;
+    }
+  }
+
+  return false;
 }
 
 //------------------------ LINE PROCESSING ------------------------//
