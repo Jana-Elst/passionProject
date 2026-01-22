@@ -3,115 +3,125 @@ const int relaysPin = 10;
 const int measurePinT1 = A1;
 const int measurePinT2 = A2;
 
-// PHONES Id's
 #define T1 0
 #define T2 1
 
-//--- CONFIG
-// Config Structure
-struct PhoneConfig
-{
-  int pickupThreshold; // Voltage to consider "Off-Hook"
-  int hangupThreshold; // Voltage to consider "On-Hook"
-  int timeout;         // For pulse dialing later
+struct PhoneConfig {
+  int pickupThreshold;
+  int hangupThreshold;
+  int timeout;
 };
 
 const PhoneConfig phoneConfigs[2] = {
-    {150, 80, 600}, // T1
-    {150, 80, 600}  // T2
-};
+    {150, 80, 600},
+    {150, 80, 600}};
 
-// Timing for Relay Stability
-unsigned long lastRelaySwitchTime = 0;
-const int debounceDelay = 200;
-
-//--- STATES / VARIABLES
-// State Structure
-struct PhoneState
-{
+struct PhoneState {
   bool isOffHook;
   int pulseCount;
   bool inPulse;
   unsigned long lastPulseTime;
+  bool isActuallyHangingUp; //distinguish pulse vs hangup
 };
 
 PhoneState phoneStates[2] = {
-    {false, 0, false, 0}, // T1
-    {false, 0, false, 0}  // T2
+  {false, 0, false, 0, false},
+  {false, 0, false, 0, false}
 };
 
 bool globalRelayState = false;
+unsigned long lastRelayAction = 0;
+const int RELAY_STABILITY_PAUSE = 1000; // Wait 1s after connection before allowing break
 
-//------------------------ SETUP ------------------------//
-void setup()
-{
+void setup() {
   Serial.begin(9600);
   pinMode(relaysPin, OUTPUT);
   digitalWrite(relaysPin, LOW);
 }
 
-//------------------------ LOOP ------------------------//
-void loop()
-{
-  // 1. Read values
+void loop() {
   int valT1 = analogRead(measurePinT1);
   int valT2 = analogRead(measurePinT2);
 
-  // 2. Detect Hook States
-  hookStateDetection(valT1, T1);
-  hookStateDetection(valT2, T2);
+  // 1. Process the lines
+  processLine(valT1, T1);
+  processLine(valT2, T2);
 
-  // 3. Manage Relay based on states
-  switchRelays();
-
-  // 4. Debugging
-  static unsigned long lastLog = 0;
-  if (millis() - lastLog > 500)
-  {
-    printDebug(valT1, valT2);
-    lastLog = millis();
-  }
+  // 2. Control the Relay
+  updateRelayLogic();
 }
 
-//------------------------ Functions ------------------------//
-void hookStateDetection(int val, int phoneID)
-{
+//------------------------ LINE PROCESSING ------------------------//
+void processLine(int val, int phoneID) {
   const PhoneConfig &config = phoneConfigs[phoneID];
   PhoneState &state = phoneStates[phoneID];
-  bool prev = state.isOffHook;
 
-  // Hysteresis Logic
-  if (!state.isOffHook && val > config.pickupThreshold)
-  {
+  // LIFT DETECTION
+  if (!state.isOffHook && val > config.pickupThreshold) {
     state.isOffHook = true;
-  }
-  else if (state.isOffHook && val < config.hangupThreshold)
-  {
-    state.isOffHook = false;
-  }
-
-  if (state.isOffHook != prev)
-  {
+    state.pulseCount = 0;
     Serial.print("Phone ");
     Serial.print(phoneID);
-    Serial.println(state.isOffHook ? " [OFF-HOOK]" : " [ON-HOOK]");
+    Serial.println(" [OFF-HOOK]");
+  }
+
+  // PULSE & HANGUP LOGIC
+  if (state.isOffHook) {
+    // Detection of a pulse/break
+    if (val < config.hangupThreshold && !state.inPulse) {
+      state.inPulse = true;
+      state.lastPulseTime = millis();
+    }
+    // Detection of a re-connect
+    else if (val > config.pickupThreshold && state.inPulse) {
+      state.inPulse = false;
+      state.pulseCount++;
+      state.lastPulseTime = millis();
+    }
+
+    // Timeout Logic: Is the silence a Digit or a Hang-up?
+    if (millis() - state.lastPulseTime > config.timeout) {
+      if (state.inPulse) {
+        // Line stayed low too long -> REAL HANGUP
+        state.isOffHook = false;
+        state.inPulse = false;
+        state.pulseCount = 0;
+        Serial.print("Phone ");
+        Serial.print(phoneID);
+        Serial.println(" [ON-HOOK]");
+      } else if (state.pulseCount > 0) {
+        // Line stayed high -> DIGIT FINISHED
+        int digit = (state.pulseCount == 10) ? 0 : state.pulseCount;
+        Serial.print("Phone ");
+        Serial.print(phoneID);
+        Serial.print(" Dialed: ");
+        Serial.println(digit);
+        state.pulseCount = 0;
+      }
+    }
   }
 }
 
-void switchRelays()
-{
-  // Logic: Both phones must be off-hook to engage relay
-  bool targetState = (phoneStates[T1].isOffHook && phoneStates[T2].isOffHook);
+//------------------------ RELAY CONTROL ------------------------//
 
-  if (targetState != globalRelayState)
-  {
-    if (millis() - lastRelaySwitchTime > debounceDelay)
-    {
+void updateRelayLogic() {
+  // A phone is "In Use" if it is Off-Hook and NOT currently in the middle of a
+  // pulse break
+  bool t1Active = phoneStates[T1].isOffHook && !phoneStates[T1].inPulse;
+  bool t2Active = phoneStates[T2].isOffHook && !phoneStates[T2].inPulse;
+
+  bool targetState = (t1Active && t2Active);
+
+  // Add a lockout: Don't flip relay if someone is actively pulsing/dialing
+  bool anyoneIsPulsing = phoneStates[T1].inPulse || phoneStates[T2].inPulse;
+
+  if (!anyoneIsPulsing && targetState != globalRelayState) {
+    // Extra debounce: Ensure we don't rapid-fire the relay
+    if (millis() - lastRelayAction > 500) {
       globalRelayState = targetState;
-      lastRelaySwitchTime = millis();
-
       digitalWrite(relaysPin, globalRelayState ? HIGH : LOW);
-      Serial.println(globalRelayState ? ">>> RELAY HIGH" : ">>> RELAY LOW");
+      lastRelayAction = millis();
+      Serial.println(globalRelayState ? ">>> CONNECTED" : ">>> DISCONNECTED");
     }
   }
 }
