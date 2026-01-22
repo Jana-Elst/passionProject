@@ -3,27 +3,30 @@ const int relaysPin = 10;
 const int measurePinT1 = A1;
 const int measurePinT2 = A2;
 
-// PHONES
-// Id's
+// PHONES Id's
 #define T1 0
 #define T2 1
 
-// Config
+//--- CONFIG
+// Config Structure
 struct PhoneConfig
 {
-  int onHookLimit;
-  int pulseLowThreshold;
-  int pulseHighThreshold;
-  int timeout;
+  int pickupThreshold; // Voltage to consider "Off-Hook"
+  int hangupThreshold; // Voltage to consider "On-Hook"
+  int timeout;         // For pulse dialing later
 };
 
 const PhoneConfig phoneConfigs[2] = {
-    //onHookLimit, pulseLowThreshold, pulseHighThreshold, timeout
-    {100, 200, 300, 600}, // T1
-    {100, 300, 450, 600}  // T2
+    {150, 80, 600}, // T1
+    {150, 80, 600}  // T2
 };
 
-// State
+// Timing for Relay Stability
+unsigned long lastRelaySwitchTime = 0;
+const int debounceDelay = 200;
+
+//--- STATES / VARIABLES
+// State Structure
 struct PhoneState
 {
   bool isOffHook;
@@ -35,91 +38,80 @@ struct PhoneState
 PhoneState phoneStates[2] = {
     {false, 0, false, 0}, // T1
     {false, 0, false, 0}  // T2
-  };
-bool currentStatePhonesAreOffHook = true;
+};
 
+bool globalRelayState = false;
+
+//------------------------ SETUP ------------------------//
 void setup()
 {
   Serial.begin(9600);
   pinMode(relaysPin, OUTPUT);
-  digitalWrite(relaysPin, HIGH);
+  digitalWrite(relaysPin, LOW);
 }
 
+//------------------------ LOOP ------------------------//
 void loop()
 {
-  // 1. read phone values
-  const int valT1 = analogRead(measurePinT1);
-  const int valT2 = analogRead(measurePinT2);
+  // 1. Read values
+  int valT1 = analogRead(measurePinT1);
+  int valT2 = analogRead(measurePinT2);
 
-  // Serial.print("T1: "); Serial.print(valT1);
-  // Serial.print(" | T2: "); Serial.println(valT2);
-
-  // 2. get hook state
+  // 2. Detect Hook States
   hookStateDetection(valT1, T1);
   hookStateDetection(valT2, T2);
 
-  // 3. Switch Relays based on state
+  // 3. Manage Relay based on states
   switchRelays();
+
+  // 4. Debugging
+  static unsigned long lastLog = 0;
+  if (millis() - lastLog > 500)
+  {
+    printDebug(valT1, valT2);
+    lastLog = millis();
+  }
 }
 
-//------------------------ logic ------------------------//
+//------------------------ Functions ------------------------//
 void hookStateDetection(int val, int phoneID)
 {
   const PhoneConfig &config = phoneConfigs[phoneID];
   PhoneState &state = phoneStates[phoneID];
+  bool prev = state.isOffHook;
 
-  bool previousStateIsOffHook = state.isOffHook;
-  if (val > config.pulseHighThreshold)
+  // Hysteresis Logic
+  if (!state.isOffHook && val > config.pickupThreshold)
   {
     state.isOffHook = true;
-    if (state.isOffHook != previousStateIsOffHook)
-    {
-      Serial.print(phoneID); Serial.println("[OFF-HOOK] Dialing enabled.");
-    }
   }
-  else if (val < config.onHookLimit)
+  else if (state.isOffHook && val < config.hangupThreshold)
   {
     state.isOffHook = false;
-    if (state.isOffHook != previousStateIsOffHook)
-    {
-      Serial.print(phoneID); Serial.println("[ON-HOOK] Line closed.");
-    }
+  }
+
+  if (state.isOffHook != prev)
+  {
+    Serial.print("Phone ");
+    Serial.print(phoneID);
+    Serial.println(state.isOffHook ? " [OFF-HOOK]" : " [ON-HOOK]");
   }
 }
 
-// bool phonesAreOffHook()
-// {
-//   bool prevPhonesWereOffHook = currentStatePhonesAreOffHook;
-//   bool currentPhonesAreOffHook = phoneStates[T1].isOffHook && phoneStates[T2].isOffHook;
-//   if (currentPhonesAreOffHook && !prevPhonesWereOffHook)
-//   {
-//     Serial.println("T1T2OFFH");
-//   } else {
-//     Serial.println("T1T2ONH");
-//   }
-//   return currentPhonesAreOffHook;
-// }
-
 void switchRelays()
 {
-  bool prevPhonesWereOffHook = currentStatePhonesAreOffHook;
-  bool currentPhonesAreOffHook = phoneStates[T1].isOffHook && phoneStates[T2].isOffHook;
+  // Logic: Both phones must be off-hook to engage relay
+  bool targetState = (phoneStates[T1].isOffHook && phoneStates[T2].isOffHook);
 
-  if (currentPhonesAreOffHook != prevPhonesWereOffHook)
+  if (targetState != globalRelayState)
   {
-    if (currentPhonesAreOffHook)
+    if (millis() - lastRelaySwitchTime > debounceDelay)
     {
-      Serial.println("T1T2OFFH");
-      // digitalWrite(relaysPin, HIGH);
-      Serial.println("HIGH");
+      globalRelayState = targetState;
+      lastRelaySwitchTime = millis();
 
-    }
-
-    currentStatePhonesAreOffHook = currentPhonesAreOffHook;
-    if (!currentPhonesAreOffHook) {
-      Serial.println("T1T2ONH");
-      // digitalWrite(relaysPin, LOW);
-      Serial.println("LOW");
+      digitalWrite(relaysPin, globalRelayState ? HIGH : LOW);
+      Serial.println(globalRelayState ? ">>> RELAY HIGH" : ">>> RELAY LOW");
     }
   }
 }
