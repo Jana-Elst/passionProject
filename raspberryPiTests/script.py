@@ -95,16 +95,16 @@ def main_loop():
                     print(f"Received: {line}")
                     line = line.upper()
 
-                    # Parse TXOFFH (e.g. T1OFFH)
-                    offhook_match = re.match(r"T(\d+)OFFH", line)
+                    # Parse TXOFFH (e.g. T1OFFH or T1_OFFH)
+                    offhook_match = re.match(r"T(\d+)_?OFFH", line)
                     if offhook_match:
                         phone_num = offhook_match.group(1)
                         phones_offhook[phone_num] = True
                         print(f"Phone {phone_num} is OFF HOOK")
                         continue
 
-                    # Parse TXONH (e.g. T1ONH) - Reset state
-                    onhook_match = re.match(r"T(\d+)ONH", line)
+                    # Parse TXONH (e.g. T1ONH or T1_ONH) - Reset state
+                    onhook_match = re.match(r"T(\d+)_?ONH", line)
                     if onhook_match:
                         phone_num = onhook_match.group(1)
                         if phones_offhook.get(phone_num):
@@ -112,9 +112,9 @@ def main_loop():
                         print(f"Phone {phone_num} is ON HOOK")
                         continue
 
-                    # Parse Dialing (e.g. T1N02 or T1N2)
+                    # Parse Dialing (e.g. T1N02 or T1_N02)
                     # Check for "N02" or "N2"
-                    dial_match = re.match(r"T(\d+)N(\d+)", line)
+                    dial_match = re.match(r"T(\d+)_?N(\d+)", line)
                     if dial_match:
                         phone_num = dial_match.group(1)
                         dialed_num = int(dial_match.group(2)) # Convert "02" to 2
