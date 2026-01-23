@@ -84,7 +84,7 @@ void loop() {
   processLine(valueT2, T2);
 
   //--- 3. Control the Relay
-  controlRelay();
+  // controlRelay();
 }
 
 //------------------------ Give handshake to the PI ------------------------//
