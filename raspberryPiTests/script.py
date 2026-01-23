@@ -145,18 +145,14 @@ def onhook(phone_num):
         print(f"Phone {phone_num} is ON HOOK")
 
 def process_dialed_number(phone_num, arduino_map):
-    # This runs when the timer expires
+    # This runs when 2 digits are collected
     if phone_num not in dial_buffer:
         return
 
     full_number_str = dial_buffer.pop(phone_num, "")
     print(f"Dialing complete for Phone {phone_num}: {full_number_str}")
     
-    # Clean up timer reference
-    if phone_num in dial_timers:
-        del dial_timers[phone_num]
-
-    # Enforce strictly 2 digits
+    # Enforce strictly 2 digits (double check)
     if len(full_number_str) != 2:
         print(f"Ignored: {full_number_str} (Must be 2 digits)")
         return
@@ -193,19 +189,21 @@ def process_dialed_number(phone_num, arduino_map):
 def dialing(phone_num, dialed_num, arduino_map):
     print(f"Phone {phone_num} dialed digit: {dialed_num}")
     
-    # 1. Cancel existing timer
-    if phone_num in dial_timers:
-        dial_timers[phone_num].cancel()
-    
+    # 1. Check for Reset (0)
+    if dialed_num == 0:
+        if phone_num in dial_buffer:
+            del dial_buffer[phone_num]
+        print(f"Phone {phone_num} dialing RESET.")
+        return
+
     # 2. Add to buffer
     if phone_num not in dial_buffer:
         dial_buffer[phone_num] = ""
     dial_buffer[phone_num] += str(dialed_num)
     
-    # 3. Start new timer (x seconds)
-    t = threading.Timer(dial_timeout, process_dialed_number, args=[phone_num, arduino_map])
-    t.start()
-    dial_timers[phone_num] = t
+    # 3. Check if we have 2 digits
+    if len(dial_buffer[phone_num]) == 2:
+        process_dialed_number(phone_num, arduino_map)
 #------------------------ LOGIC LOOP ------------------------#
 def main_loop():
 
