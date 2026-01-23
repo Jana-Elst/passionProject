@@ -17,7 +17,7 @@ def find_arduinos():
         if "USB" in port.description or "ACM" in port.device:
             try:
                 # 2. Open the serial connection
-                ser = serial.Serial(port.device, 1000000, timeout=2)
+                ser = serial.Serial(port.device, 1000000, timeout=1)
                 time.sleep(2) # Give Arduino time to reboot
                 
                 # 3. Send the Handshake command
@@ -25,25 +25,26 @@ def find_arduinos():
                 
                 # 4. Read the response
                 # Read multiple lines in case of startup noise
+                device_identified = False
                 for _ in range(5):
                     response = ser.readline().decode('utf-8').strip()
                     if response:
-                        found_devices[response] = port.device
+                        found_devices[response] = ser
                         print(f"Found {response} on {port.device}")
+                        device_identified = True
                         break
                 
-                ser.close()
+                if not device_identified:
+                    ser.close()
+
             except Exception as e:
                 print(f"Could not connect to {port.device}: {e}")
                 
     return found_devices
 
-def stream_audio(port, filename):
-    # Open serial with a larger buffer
+def stream_audio(ser, filename):
+    # Serial connection is already open
     try:
-        ser = serial.Serial(port, 1000000)
-        time.sleep(2) # Wait for reboot
-
         with wave.open(filename, 'rb') as wf:
             print(f"Streaming {filename}...")
             
@@ -60,7 +61,6 @@ def stream_audio(port, filename):
                 
                 data = wf.readframes(chunk_size)
 
-        ser.close()
         print("Done streaming.")
     except Exception as e:
         print(f"Error streaming audio: {e}")
@@ -70,27 +70,28 @@ def main_loop():
     print("Scanning for Arduinos...")
     arduino_map = find_arduinos()
     
-    if "MAIN" not in arduino_map:
-        print("Error: Arduino 'MAIN' not found.")
+    if "MAIN" not in arduino_map or "T1" not in arduino_map or "T2" not in arduino_map:
+        print("Error: Arduino 'MAIN' or 'T1' or 'T2' not found.")
+        # Clean up any opened ports before exiting
+        for ser_obj in arduino_map.values():
+            ser_obj.close()
         return
 
-    main_port = arduino_map["MAIN"]
-    print(f"Connected to MAIN on {main_port}. Listening for commands...")
+    main_ser = arduino_map["MAIN"]
+    # We don't need dedicated variables for T1/T2 unless we want to validate them specifically, 
+    # but they are in the map.
 
     # State tracking
     phones_offhook = {} # Key: Phone Number (e.g., '1'), Value: Boolean
 
     try:
-        # Open connection for monitoring at 9600
-        ser = serial.Serial(main_port, 9600, timeout=1)
-        time.sleep(2) # Wait for reboot/connection stability
+        # Connection is already open from find_arduinos
+        print("Listening on MAIN Arduino...")
         
-        ser.write(b"IDENTIFY\n")
-
         while True:
             try:
-                if ser.in_waiting > 0:
-                    line = ser.readline().decode('utf-8').strip()
+                if main_ser.in_waiting > 0:
+                    line = main_ser.readline().decode('utf-8').strip()
                     if not line:
                         continue
                     
@@ -111,9 +112,9 @@ def main_loop():
                             # Identify target Arduino for audio (T1 or T2)
                             target_arduino_name = f"T{phone_num}"
                             if target_arduino_name in arduino_map:
-                                target_port = arduino_map[target_arduino_name]
-                                print(f"Streaming audio to {target_arduino_name} on {target_port}...")
-                                stream_audio(target_port, "T1.wav")
+                                target_ser = arduino_map[target_arduino_name]
+                                print(f"Streaming audio to {target_arduino_name}...")
+                                stream_audio(target_ser, "T1.wav")
                             else:
                                 print(f"Error: Arduino {target_arduino_name} not found in map. Cannot play audio.")
                             
@@ -143,13 +144,26 @@ def main_loop():
                 
     except KeyboardInterrupt:
         print("\nExiting...")
-        if ser.is_open:
-            ser.close()
+    finally:
+        # Ensure all ports are closed on exit
+        print("Closing all connections...")
+        for ser_obj in arduino_map.values():
+            if ser_obj.is_open:
+                ser_obj.close()
 
 #------------------------ EXECUTE PROGRAM ------------------------#
 if __name__ == "__main__":
     if len(sys.argv) > 2:
         # Legacy/Direct mode: python script.py port filename
-        stream_audio(sys.argv[1], sys.argv[2])
+        try:
+            port_name = sys.argv[1]
+            file_name = sys.argv[2]
+            # Open only for this specific operation
+            ser = serial.Serial(port_name, 1000000)
+            time.sleep(2)
+            stream_audio(ser, file_name)
+            ser.close()
+        except Exception as e:
+            print(f"Error in direct mode: {e}")
     else:
         main_loop()
