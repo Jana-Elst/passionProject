@@ -14,6 +14,7 @@ import threading
 
 #------------------------ CONFIG/CONSTANTS ------------------------#
 chunk_size = 64 # Match the CHUNK_SIZE in the Arduino code
+dial_timeout = 1.0 # seconds
 
 #------------------------ VARIABLES ------------------------#
 arduino_map = {}
@@ -196,8 +197,8 @@ def dialing(phone_num, dialed_num, arduino_map):
         dial_buffer[phone_num] = ""
     dial_buffer[phone_num] += str(dialed_num)
     
-    # 3. Start new timer (2.0 seconds)
-    t = threading.Timer(2.0, process_dialed_number, args=[phone_num, arduino_map])
+    # 3. Start new timer (x seconds)
+    t = threading.Timer(dial_timeout, process_dialed_number, args=[phone_num, arduino_map])
     t.start()
     dial_timers[phone_num] = t
 #------------------------ LOGIC LOOP ------------------------#
