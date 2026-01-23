@@ -103,7 +103,7 @@ def parse_action(line):
         #"action": "pattern"
         "is_offHook": r"T(\d+)_?OFFH",
         "is_onHook": r"T(\d+)_?ONH",
-        "is_dialing": r"T(\d+)_?DIAL(\d+)" #(\d+) = for the dialed num
+        "is_dialing": r"T(\d+)_?N(\d+)" #(\d+) = for the dialed num
     }
 
     for action_name, pattern in patterns.items():
