@@ -156,6 +156,11 @@ def process_dialed_number(phone_num, arduino_map):
     if phone_num in dial_timers:
         del dial_timers[phone_num]
 
+    # Enforce strictly 2 digits
+    if len(full_number_str) != 2:
+        print(f"Ignored: {full_number_str} (Must be 2 digits)")
+        return
+
     # Convert to int for logic, then to 0 padded string for filename
     try:
         dialed_num = int(full_number_str)
