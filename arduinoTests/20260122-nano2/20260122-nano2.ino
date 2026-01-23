@@ -51,7 +51,7 @@ void playAudio() {
     // Play the chunk
     for (int i = 0; i < CHUNK_SIZE; i++) {
       // Bit-shift 8-bit to 10-bit
-      analogWrite(A0, audioBuffer[i] << 2);
+      analogWriteResolution(10);
 
       // The delay between samples is what determines speed
       // Lower this number (e.g., 110, 100, 90) to make it FASTER.

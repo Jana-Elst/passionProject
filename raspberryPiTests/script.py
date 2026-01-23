@@ -101,8 +101,23 @@ def main_loop():
                     offhook_match = re.match(r"T(\d+)_?OFFH", line)
                     if offhook_match:
                         phone_num = offhook_match.group(1)
-                        phones_offhook[phone_num] = True
-                        print(f"Phone {phone_num} is OFF HOOK")
+                        if not phones_offhook.get(phone_num): # Only trigger on first off-hook
+                            phones_offhook[phone_num] = True
+                            print(f"Phone {phone_num} is OFF HOOK")
+
+                            # Trigger Audio immediately on Off-Hook
+                            print(f"Condition met: Phone {phone_num} Offhook. Playing T1.wav...")
+                            
+                            # Identify target Arduino for audio (T1 or T2)
+                            target_arduino_name = f"T{phone_num}"
+                            if target_arduino_name in arduino_map:
+                                target_port = arduino_map[target_arduino_name]
+                                print(f"Streaming audio to {target_arduino_name} on {target_port}...")
+                                stream_audio(target_port, "T1.wav")
+                            else:
+                                print(f"Error: Arduino {target_arduino_name} not found in map. Cannot play audio.")
+                            
+                            print("Resuming monitoring...")
                         continue
 
                     # Parse TXONH (e.g. T1ONH or T1_ONH) - Reset state
@@ -120,24 +135,7 @@ def main_loop():
                     if dial_match:
                         phone_num = dial_match.group(1)
                         dialed_num = int(dial_match.group(2)) # Convert "02" to 2
-                        
                         print(f"Phone {phone_num} dialed {dialed_num}")
-
-                        # "If the phone is offhook and afterwards the person dials 2"
-                        if phones_offhook.get(phone_num, False) and dialed_num == 2:
-                            print(f"Condition met: Phone {phone_num} Offhook + Dialed 2. Playing T1.wav...")
-                            
-                            # Identify target Arduino for audio (T1 or T2)
-                            target_arduino_name = f"T{phone_num}"
-                            if target_arduino_name in arduino_map:
-                                target_port = arduino_map[target_arduino_name]
-                                print(f"Streaming audio to {target_arduino_name} on {target_port}...")
-                                stream_audio(target_port, "T1.wav")
-                            else:
-                                print(f"Error: Arduino {target_arduino_name} not found in map. Cannot play audio.")
-                            
-                            # Resume monitoring loop (no need to close/reopen MAIN as we didn't use it for audio)
-                            print("Resuming monitoring...")
 
             except serial.SerialException as e:
                 print(f"Serial error: {e}")
