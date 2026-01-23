@@ -83,7 +83,10 @@ def main_loop():
     try:
         # Open connection for monitoring at 9600
         ser = serial.Serial(main_port, 9600, timeout=1)
-        # time.sleep(2) # Optional: Wait for reboot if needed, but we might miss loop start
+        time.sleep(2) # Wait for reboot/connection stability
+        
+        print("Sending handshake...")
+        ser.write(b"IDENTIFY\n")
 
         while True:
             try:
