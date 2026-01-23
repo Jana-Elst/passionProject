@@ -126,19 +126,18 @@ def main_loop():
 
                         # "If the phone is offhook and afterwards the person dials 2"
                         if phones_offhook.get(phone_num, False) and dialed_num == 2:
-                            print("Condition met: Offhook + Dialed 2. Playing T1.wav...")
+                            print(f"Condition met: Phone {phone_num} Offhook + Dialed 2. Playing T1.wav...")
                             
-                            # Close 9600 connection to switch to 1000000 for audio
-                            ser.close()
+                            # Identify target Arduino for audio (T1 or T2)
+                            target_arduino_name = f"T{phone_num}"
+                            if target_arduino_name in arduino_map:
+                                target_port = arduino_map[target_arduino_name]
+                                print(f"Streaming audio to {target_arduino_name} on {target_port}...")
+                                stream_audio(target_port, "T1.wav")
+                            else:
+                                print(f"Error: Arduino {target_arduino_name} not found in map. Cannot play audio.")
                             
-                            # Stream audio (handles its own connection)
-                            stream_audio(main_port, "T1.wav")
-                            
-                            # Reopen 9600 connection
-                            ser = serial.Serial(main_port, 9600, timeout=1)
-                            # Note: Reopening might reset Arduino again. 
-                            # If so, state is preserved here in Python, but Arduino might re-send OFFH?
-                            # Assuming this is acceptable behavior per current architecture.
+                            # Resume monitoring loop (no need to close/reopen MAIN as we didn't use it for audio)
                             print("Resuming monitoring...")
 
             except serial.SerialException as e:
