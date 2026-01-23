@@ -14,12 +14,18 @@ void setup() {
     ;
 }
 
+//--- STATE & VARIABLES
+bool isConnected = false;
+
 //------------------------ LOOP ------------------------//
 void loop() {
   //--- 0. Handshake
-  // this should loop till the handshake is done
-  while (!handshake()) {
-    delay(100);
+  // If we haven't established a connection yet, wait for it.
+  if (!isConnected) {
+    while (!handshake()) {
+      delay(100);
+    }
+    isConnected = true;
   }
 
   //--- 1. Audio
@@ -51,7 +57,7 @@ void playAudio() {
     // Play the chunk
     for (int i = 0; i < CHUNK_SIZE; i++) {
       // Bit-shift 8-bit to 10-bit
-      analogWriteResolution(10);
+      analogWrite(A0, audioBuffer[i] << 2);
 
       // The delay between samples is what determines speed
       // Lower this number (e.g., 110, 100, 90) to make it FASTER.

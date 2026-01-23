@@ -5,6 +5,7 @@ import time
 import wave
 import sys
 import re
+import threading
 
 #------------------------ FUNCTIONS ------------------------#
 def find_arduinos():
@@ -42,7 +43,7 @@ def find_arduinos():
                 
     return found_devices
 
-def stream_audio(ser, filename):
+def stream_audio(ser, filename, stop_event):
     # Serial connection is already open
     try:
         with wave.open(filename, 'rb') as wf:
@@ -53,6 +54,10 @@ def stream_audio(ser, filename):
             data = wf.readframes(chunk_size)
             
             while data:
+                if stop_event.is_set():
+                    print(f"Stopping stream for {filename}...")
+                    break
+
                 ser.write(data)
                 
                 # We only sleep long enough to prevent the Pi from crashing the Serial buffer. 
@@ -83,6 +88,7 @@ def main_loop():
 
     # State tracking
     phones_offhook = {} # Key: Phone Number (e.g., '1'), Value: Boolean
+    active_streams = {} # Key: Phone Number, Value: (Thread, StopEvent)
 
     try:
         # Connection is already open from find_arduinos
@@ -106,15 +112,24 @@ def main_loop():
                             phones_offhook[phone_num] = True
                             print(f"Phone {phone_num} is OFF HOOK")
 
-                            # Trigger Audio immediately on Off-Hook
+                            # Trigger Audio in Background Thread
                             print(f"Condition met: Phone {phone_num} Offhook. Playing T1.wav...")
                             
-                            # Identify target Arduino for audio (T1 or T2)
                             target_arduino_name = f"T{phone_num}"
                             if target_arduino_name in arduino_map:
                                 target_ser = arduino_map[target_arduino_name]
-                                print(f"Streaming audio to {target_arduino_name}...")
-                                stream_audio(target_ser, "T1.wav")
+                                
+                                # Check if already playing
+                                if phone_num in active_streams:
+                                    print(f"Already streaming to {target_arduino_name}. Skipping redundant start.")
+                                else:
+                                    # Start Thread
+                                    print(f"Starting stream to {target_arduino_name}...")
+                                    stop_event = threading.Event()
+                                    t = threading.Thread(target=stream_audio, args=(target_ser, "T1.wav", stop_event))
+                                    t.start()
+                                    active_streams[phone_num] = (t, stop_event)
+                                
                             else:
                                 print(f"Error: Arduino {target_arduino_name} not found in map. Cannot play audio.")
                             
@@ -127,6 +142,15 @@ def main_loop():
                         phone_num = onhook_match.group(1)
                         if phones_offhook.get(phone_num):
                             del phones_offhook[phone_num]
+                        
+                        # Stop Audio Stream
+                        if phone_num in active_streams:
+                            print(f"Stopping audio for Phone {phone_num}...")
+                            thread, event = active_streams[phone_num]
+                            event.set()
+                            thread.join() # Wait for it to finish gracefully
+                            del active_streams[phone_num]
+
                         print(f"Phone {phone_num} is ON HOOK")
                         continue
 
@@ -161,7 +185,11 @@ if __name__ == "__main__":
             # Open only for this specific operation
             ser = serial.Serial(port_name, 1000000)
             time.sleep(2)
-            stream_audio(ser, file_name)
+            
+            # Create a dummy event that is never set, so it plays until end
+            stop_event = threading.Event()
+            stream_audio(ser, file_name, stop_event)
+            
             ser.close()
         except Exception as e:
             print(f"Error in direct mode: {e}")

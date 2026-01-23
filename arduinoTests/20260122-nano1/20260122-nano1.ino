@@ -10,15 +10,22 @@ uint8_t audioBuffer[CHUNK_SIZE];
 void setup() {
   Serial.begin(1000000);
   analogWriteResolution(10);
-  while (!Serial);
+  while (!Serial)
+    ;
 }
+
+//--- STATE & VARIABLES
+bool isConnected = false;
 
 //------------------------ LOOP ------------------------//
 void loop() {
   //--- 0. Handshake
-  // this should loop till the handshake is done
-  while (!handshake()) {
-    delay(100);
+  // If we haven't established a connection yet, wait for it.
+  if (!isConnected) {
+    while (!handshake()) {
+      delay(100);
+    }
+    isConnected = true;
   }
 
   //--- 1. Audio
