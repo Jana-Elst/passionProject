@@ -85,6 +85,8 @@ def stream_audio(ser, filename, stop_event):
                 # send data till there is no more data
                 data = wf.readframes(chunk_size)
 
+
+        del active_streams[phone_num]
         print("Done streaming.")
     except Exception as e:
         print(f"Error streaming audio: {e}")
