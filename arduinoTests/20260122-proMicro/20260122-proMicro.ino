@@ -55,7 +55,7 @@ const int RelayStabilityPause =
 
 //------------------------ SETUP ------------------------//
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(1000000);
   pinMode(relaysPin, OUTPUT);
   digitalWrite(relaysPin, LOW);
 }

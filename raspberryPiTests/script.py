@@ -9,41 +9,32 @@ import re
 #------------------------ FUNCTIONS ------------------------#
 def find_arduinos():
     found_devices = {}
-    baud_rates = [9600, 1000000]
 
     # 1. Get a list of all available serial ports
     ports = serial.tools.list_ports.comports()
     
     for port in ports:
         if "USB" in port.description or "ACM" in port.device:
-            for baud in baud_rates:
-                try:
-                    # 2. Open the serial connection
-                    print(f"Checking {port.device} at {baud}...")
-                    ser = serial.Serial(port.device, baud, timeout=2)
-                    time.sleep(2) # Give Arduino time to reboot
-                    
-                    # 3. Send the Handshake command
-                    ser.write(b"IDENTIFY\n")
-                    
-                    # 4. Read the response
-                    # Read multiple lines in case of startup noise
-                    response = None
-                    for _ in range(5):
-                        line = ser.readline().decode('utf-8').strip()
-                        if line:
-                            response = line
-                            break
-                    
+            try:
+                # 2. Open the serial connection
+                ser = serial.Serial(port.device, 1000000, timeout=2)
+                time.sleep(2) # Give Arduino time to reboot
+                
+                # 3. Send the Handshake command
+                ser.write(b"IDENTIFY\n")
+                
+                # 4. Read the response
+                # Read multiple lines in case of startup noise
+                for _ in range(5):
+                    response = ser.readline().decode('utf-8').strip()
                     if response:
                         found_devices[response] = port.device
-                        print(f"Found {response} on {port.device} (@{baud})")
-                        ser.close()
-                        break # Stop checking other baud rates for this port
-                    
-                    ser.close()
-                except Exception as e:
-                    print(f"Could not connect to {port.device} at {baud}: {e}")
+                        print(f"Found {response} on {port.device}")
+                        break
+                
+                ser.close()
+            except Exception as e:
+                print(f"Could not connect to {port.device}: {e}")
                 
     return found_devices
 
@@ -52,13 +43,6 @@ def stream_audio(port, filename):
     try:
         ser = serial.Serial(port, 1000000)
         time.sleep(2) # Wait for reboot
-        
-        # Send Handshake to get past the "while (!handshake())" loop on Arduino
-        print("Sending handshake to Audio Arduino...")
-        ser.write(b"IDENTIFY\n")
-        # Read the identifier response (e.g. "T1") to clear buffer and ensure it's ready
-        response = ser.readline().decode('utf-8').strip() 
-        print(f"Audio Handshake response: {response}")
 
         with wave.open(filename, 'rb') as wf:
             print(f"Streaming {filename}...")
@@ -100,6 +84,7 @@ def main_loop():
         # Open connection for monitoring at 9600
         ser = serial.Serial(main_port, 9600, timeout=1)
         time.sleep(2) # Wait for reboot/connection stability
+        
         ser.write(b"IDENTIFY\n")
 
         while True:
