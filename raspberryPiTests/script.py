@@ -37,6 +37,12 @@ def find_arduinos():
             try:
                 # 2. Open the serial connection
                 ser = serial.Serial(port.device, 1000000, timeout=1)
+                
+                # Force Reset (Close/Open equivalent)
+                ser.dtr = False
+                time.sleep(0.1)
+                ser.dtr = True
+                
                 time.sleep(2) # Give Arduino time to reboot
                 
                 # 3. Send the Handshake command
@@ -61,7 +67,7 @@ def find_arduinos():
                 
     return found_devices
 
-def stream_audio(ser, filename, stop_event):
+def stream_audio(ser, filename, stop_event, phone_num):
     try:
         # Open audio file, rb = read binary, wf = short for wave file
         with wave.open(filename, 'rb') as wf:
@@ -85,11 +91,14 @@ def stream_audio(ser, filename, stop_event):
                 # send data till there is no more data
                 data = wf.readframes(chunk_size)
 
-
-        del active_streams[phone_num]
         print("Done streaming.")
     except Exception as e:
         print(f"Error streaming audio: {e}")
+    finally:
+        # Ensure we remove ourselves from the active list when done
+        if phone_num in active_streams:
+            del active_streams[phone_num]
+            print(f"Stream finished. Removed Phone {phone_num} from active list.")
 
 def read_serial(ser):
     if ser.in_waiting > 0: # Check if there is data to read
@@ -171,7 +180,7 @@ def process_dialed_number(phone_num, arduino_map):
 
     # 4. Start Thread
     stop_event = threading.Event()
-    t = threading.Thread(target=stream_audio, args=(target_ser, filename, stop_event))
+    t = threading.Thread(target=stream_audio, args=(target_ser, filename, stop_event, phone_num))
     t.start()
     active_streams[phone_num] = (t, stop_event)
 
