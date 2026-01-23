@@ -1,7 +1,7 @@
 #convert files to wav
 # brew install ffmpeg
-# whole folder -> for f in *.m4a; do ffmpeg -i "$f" -ar 8000 -ac 1 "${f%.m4a}.wav"; done
-# one file -> ffmpeg -i "input.m4a" -ar 8000 -ac 1 "output.wav"
+# whole folder -> for f in *.m4a; do ffmpeg -i "$f" -ar 8000 -ac 1 -c:a pcm_u8 "${f%.m4a}.wav"; done
+# one file -> ffmpeg -i "input.m4a" -ar 8000 -ac 1 -acodec pcm_u8 "output.wav"
 # check if convertion is right -> ffprobe output_filename.wav
 
 #------------------------ IMPORTS ------------------------#
