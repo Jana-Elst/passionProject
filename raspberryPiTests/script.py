@@ -1,9 +1,14 @@
+#convert files to wav
+# brew install ffmpeg
+# whole folder -> for f in *.m4a; do ffmpeg -i "$f" -ar 8000 -ac 1 "${f%.m4a}.wav"; done
+# one file -> ffmpeg -i "input.m4a" -ar 8000 -ac 1 "output.wav"
+# check if convertion is right -> ffprobe output_filename.wav
+
 #------------------------ IMPORTS ------------------------#
 import serial
 import serial.tools.list_ports
 import time
 import wave
-import sys
 import re
 import threading
 
@@ -17,6 +22,8 @@ T1_ser = None
 T2_ser = None
 phones_offhook = {} # Key: Phone Number (e.g., '1'), Value: Boolean
 active_streams = {} # Key: Phone Number, Value: (Thread, StopEvent)
+dial_buffer = {} # Key: Phone Number, Value: String (e.g., "23")
+dial_timers = {} # Key: Phone Number, Value: Timer Object
 
 #------------------------ FUNCTIONS ------------------------#
 def find_arduinos():
@@ -111,29 +118,6 @@ def offhook(phone_num, arduino_map):
         phones_offhook[phone_num] = True
         print(f"Phone {phone_num} is OFF HOOK")
 
-        # Trigger Audio in Background Thread
-        print(f"Condition met: Phone {phone_num} Offhook. Playing T1.wav...")
-                            
-        target_arduino_name = f"T{phone_num}"
-        if target_arduino_name in arduino_map:
-            target_ser = arduino_map[target_arduino_name]
-                                
-            # Check if already playing
-            if phone_num in active_streams:
-                print(f"Already streaming to {target_arduino_name}. Skipping redundant start.")
-            else:
-                # Start Thread
-                print(f"Starting stream to {target_arduino_name}...")
-                stop_event = threading.Event()
-                t = threading.Thread(target=stream_audio, args=(target_ser, "T1.wav", stop_event))
-                t.start()
-                active_streams[phone_num] = (t, stop_event)
-                                
-        else:
-            print(f"Error: Arduino {target_arduino_name} not found in map. Cannot play audio.")
-                            
-        print("Resuming monitoring...")
-
 def onhook(phone_num):
     if phones_offhook.get(phone_num): # Only trigger on first on-hook
         del phones_offhook[phone_num]
@@ -148,9 +132,63 @@ def onhook(phone_num):
 
         print(f"Phone {phone_num} is ON HOOK")
 
-def dialing(phone_num, dialed_num):           
-    print(f"Phone {phone_num} is dialing {dialed_num}")
+def process_dialed_number(phone_num, arduino_map):
+    # This runs when the timer expires
+    if phone_num not in dial_buffer:
+        return
 
+    full_number_str = dial_buffer.pop(phone_num, "")
+    print(f"Dialing complete for Phone {phone_num}: {full_number_str}")
+    
+    # Clean up timer reference
+    if phone_num in dial_timers:
+        del dial_timers[phone_num]
+
+    # Convert to int for logic, then to 0 padded string for filename
+    try:
+        dialed_num = int(full_number_str)
+    except ValueError:
+        return
+
+    # 1. Ignore if already playing
+    if phone_num in active_streams:
+        print(f"Audio already playing on Phone {phone_num}. Ignoring dial.")
+        return
+
+    # 2. Identify Target
+    target_arduino_name = f"T{phone_num}"
+    if target_arduino_name not in arduino_map:
+        print(f"Error: Arduino {target_arduino_name} not found in map. Cannot play audio.")
+        return
+
+    target_ser = arduino_map[target_arduino_name]
+
+    # 3. Determine Filename
+    filename = f"sender-{dialed_num:02d}.wav"
+    print(f"Playing {filename} to {target_arduino_name}...")
+
+    # 4. Start Thread
+    stop_event = threading.Event()
+    t = threading.Thread(target=stream_audio, args=(target_ser, filename, stop_event))
+    t.start()
+    active_streams[phone_num] = (t, stop_event)
+
+def dialing(phone_num, dialed_num, arduino_map):
+    print(f"Phone {phone_num} dialed digit: {dialed_num}")
+    
+    # 1. Cancel existing timer
+    if phone_num in dial_timers:
+        dial_timers[phone_num].cancel()
+    
+    # 2. Add to buffer
+    if phone_num not in dial_buffer:
+        dial_buffer[phone_num] = ""
+    dial_buffer[phone_num] += str(dialed_num)
+    
+    # 3. Start new timer (2.0 seconds)
+    t = threading.Timer(2.0, process_dialed_number, args=[phone_num, arduino_map])
+    t.start()
+    dial_timers[phone_num] = t
 #------------------------ LOGIC LOOP ------------------------#
 def main_loop():
 
@@ -197,7 +235,7 @@ def main_loop():
                     onhook(phone_num)
                     continue
                 if action_type == "is_dialing":
-                    dialing(phone_num, extra_data)
+                    dialing(phone_num, extra_data, arduino_map)
                     continue
 
             except serial.SerialException as e:
