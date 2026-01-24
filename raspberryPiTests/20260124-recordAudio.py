@@ -5,7 +5,7 @@ import time
 # --- CONFIGURATION ---
 SERIAL_PORT = '/dev/ttyACM0' 
 BAUD_RATE = 250000 # Increased for better reliability
-SAMPLE_RATE = 8000 # Matches the 125us interval in Arduino
+SAMPLE_RATE = 16000 # Matches the 125us interval in Arduino
 
 def record_audio():
     try:
