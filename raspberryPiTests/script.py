@@ -133,6 +133,7 @@ def offhook(phone_num, arduino_map):
 def onhook(phone_num):
     if phones_offhook.get(phone_num): # Only trigger on first on-hook
         del phones_offhook[phone_num]
+        del dial_buffer[phone_num]
                         
         # Stop Audio Stream
         if phone_num in active_streams:
@@ -189,7 +190,6 @@ def process_dialed_number(phone_num, arduino_map):
 def dialing(phone_num, dialed_num, arduino_map):
     print(f"Phone {phone_num} dialed digit: {dialed_num}")
     
-    # 1. Check for Reset (0)
     # 1. Check for Reset (0)
     if dialed_num == 0:
         if phone_num in dial_buffer and len(dial_buffer[phone_num]) > 2:
