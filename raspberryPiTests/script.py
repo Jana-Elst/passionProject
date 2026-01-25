@@ -190,11 +190,12 @@ def dialing(phone_num, dialed_num, arduino_map):
     print(f"Phone {phone_num} dialed digit: {dialed_num}")
     
     # 1. Check for Reset (0)
+    # 1. Check for Reset (0)
     if dialed_num == 0:
-        if phone_num in dial_buffer:
+        if phone_num in dial_buffer and len(dial_buffer[phone_num]) > 2:
             del dial_buffer[phone_num]
-        print(f"Phone {phone_num} dialing RESET.")
-        return
+            print(f"Phone {phone_num} dialing RESET.")
+            return
 
     # 2. Add to buffer
     if phone_num not in dial_buffer:
