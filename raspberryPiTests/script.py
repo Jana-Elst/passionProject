@@ -110,6 +110,7 @@ def read_serial(ser):
             return line.upper()
     return None
 
+#--- detect actions ---
 def parse_action(line):
     patterns = {
         #"action": "pattern"
@@ -125,6 +126,7 @@ def parse_action(line):
             
     return None
 
+#--- handle actions ---
 def offhook(phone_num, arduino_map):
     if not phones_offhook.get(phone_num): # Only trigger on first off-hook
         phones_offhook[phone_num] = True
