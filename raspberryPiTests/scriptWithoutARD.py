@@ -446,6 +446,13 @@ class CallLogic:
         duration = self.sender.get_duration(files)
         self.start_dial_reminder(extra_delay=duration)
 
+        # 3. Check for Early Receiver (Already Offhook)
+        receiver = self.get_other_phone(self.sender)
+        if receiver.state == PhoneState.OFFHOOK:
+            print("Receiver is already OFFHOOK. Playing Wait Message.")
+            # Play "Wait a moment... + Waiting Tone"
+            receiver.play_async(["ReceiverOffhookBeforeRing.wav", "ReceiverWaitingTone.wav"])
+
     def run_sub_case_conversation_dial(self, event_type, phone, extra=None):        
         if event_type == "dial" and phone == self.sender:
             # User interaction -> Reset timer loop (so it doesn't beep while dialing)
@@ -464,15 +471,27 @@ class CallLogic:
                 # --- correct number ---
                 print(f"Valid Number: {current_input}")
                 self.stop_dial_reminder() # Success! Stop reminder.
-                self.run_sub_case_conversation_ring()
+                
+                # Check if Receiver is waiting (Early Pickup)
+                receiver = self.get_other_phone(self.sender)
+                if receiver.state == PhoneState.OFFHOOK:
+                    print("Receiver Waiting -> Skip Ring -> Connect")
+                    self.run_sub_case_conversation_starter()
+                else:
+                    self.run_sub_case_conversation_ring()
              
             # Case: Invalid (Doesn't start with 0)
             else:
                 # --- wrong number ---
                 print("Wrong Number (Must start with 0)")
-                #  self.sender.play_async(["WrongNumber.wav"])
+                self.sender.play_async(["WrongNumber.wav"])
                 self.dialed_number = "" # Reset
                 # Timer is already restarted above, so it will loop in 10s if idle
+
+        # Case: Receiver picks up EARLY (while sender is dialing)
+        elif event_type == "is_offHook" and phone == self.get_other_phone(self.sender):
+             print("Receiver picked up EARLY. Playing Wait Message.")
+             phone.play_async(["ReceiverOffhookBeforeRing.wav"])
 
         elif event_type == "offhook" and phone == self.receiver:
              self.run_sub_case_conversation_starter()
