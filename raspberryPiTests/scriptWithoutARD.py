@@ -329,7 +329,7 @@ class CallLogic:
         self.sender = None
         self.receiver = None
         self.ringing_timer = None
-        self.dialed_number = ""
+        self.dial_buffer = {"1": "", "2": ""} # Separate buffer per phone
     
     # 2. Event Handler
     def handle_event(self, action):
@@ -377,9 +377,17 @@ class CallLogic:
     #this will trigger some actions
     def dial(self, phone, number):
         print(f"Phone {phone.number} dialed {number}")
-        self.dialed_number += str(number)
-        self.current_case_handler("dial", phone, number)
-
+        # Append to specific phone buffer
+        self.dial_buffer[phone.number] += str(number)
+        
+        if self.mode == SystemMode.CALL_SETUP:
+            self.current_case_handler("dial", phone)
+        
+        elif self.mode == SystemMode.VOICEMAIL_RECORDING: # e.g. stop recording
+             # In VM case, we might check sender's dial
+             if self.current_case_handler:
+                 self.current_case_handler("dial", phone, extra=None)
+        
     #--- MAIN CASES/LOGIC ---#
     # send to current case
     def current_case_handler(self, event_type, phone, extra=None):
@@ -439,7 +447,7 @@ class CallLogic:
         self.sender.play_async(files)
 
         # 2. wait for dialing
-        self.dialed_number = "" # Reset buffer
+        self.dial_buffer[self.sender.number] = "" # Reset Sender's buffer
         self.current_case_handler = self.run_sub_case_conversation_dial
         
         # Start Reminder Loop (Wait for intro to finish + 10s)
@@ -458,8 +466,9 @@ class CallLogic:
             # User interaction -> Reset timer loop (so it doesn't beep while dialing)
             self.start_dial_reminder()
             
-            current_input = self.dialed_number
-            print(f"Checking input: {current_input}")
+            # Use specific buffer
+            current_input = self.dial_buffer[self.sender.number]
+            print(f"Checking input for {self.sender.name}: {current_input}")
              
             # Case: Valid Start ("0")
             if current_input == "0":
@@ -485,7 +494,7 @@ class CallLogic:
                 # --- wrong number ---
                 print("Wrong Number (Must start with 0)")
                 self.sender.play_async(["WrongNumber.wav"])
-                self.dialed_number = "" # Reset
+                self.dial_buffer[self.sender.number] = "" # Reset
                 # Timer is already restarted above, so it will loop in 10s if idle
 
         # Case: Receiver picks up EARLY (while sender is dialing)
@@ -527,8 +536,8 @@ class CallLogic:
     def run_sub_case_conversation_starter(self):
         print(f"--- CONVERSATION STARTER ---")
         
-        topic = f"topic-{self.dialed_number}.wav"
-        question = f"question-{self.dialed_number}.wav"
+        topic = f"topic-{self.dial_buffer[self.sender.number]}.wav"
+        question = f"question-{self.dial_buffer[self.sender.number]}.wav"
 
         # Define Audio Parts
         sender_part1 = ["SenderCall1.wav", topic, "SenderCall2.wav"]
@@ -594,7 +603,7 @@ class CallLogic:
     def run_sub_case_voicemail_intro(self):
         print("--- VOICEMAIL INTRO ---")
         
-        suffix = self.dialed_number[1:] if len(self.dialed_number) > 1 else "default"
+        suffix = self.dial_buffer[self.sender.number][1:] if len(self.dial_buffer[self.sender.number]) > 1 else "default"
         topic = f"topic-{suffix}.wav"
         question = f"question-{suffix}.wav"
 
@@ -610,7 +619,7 @@ class CallLogic:
 
     def run_sub_case_voicemail_playback(self):
         print("--- VOICEMAIL PLAYBACK ---")
-        topic = f"voicemail-{self.sender.name}-{self.dialed_number}.wav"
+        topic = f"voicemail-{self.sender.name}-{self.dial_buffer[self.sender.number]}.wav"
 
         self.sender.play_async([
             topic,
@@ -671,7 +680,7 @@ class CallLogic:
             ])
         
         # Validate Recording
-        final_filename = f"voicemail-{self.sender.name}-{self.dialed_number}.wav"
+        final_filename = f"voicemail-{self.sender.name}-{self.dial_buffer[self.sender.number]}.wav"
         
         try:
              # Check duration of temp file
