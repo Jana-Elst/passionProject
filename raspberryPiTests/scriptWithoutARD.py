@@ -407,25 +407,63 @@ class CallLogic:
         # 1. play intro
         self.sender.play_async(["SenderIntro.wav"])
 
+    # --- Helper: Dial Reminder Timer ---
+    def start_dial_reminder(self, extra_delay=0.0):
+        self.stop_dial_reminder()
+        # Loop every 10s AFTER the audio finishes (extra_delay)
+        timeout = 10.0 + extra_delay
+        # print(f"DEBUG: Timer start for {timeout:.2f}s (Audio: {extra_delay:.2f}s)")
+        self.dial_reminder_timer = threading.Timer(timeout, self.on_dial_reminder_timeout)
+        self.dial_reminder_timer.start()
+
+    def stop_dial_reminder(self):
+        if hasattr(self, 'dial_reminder_timer') and self.dial_reminder_timer:
+            self.dial_reminder_timer.cancel()
+            self.dial_reminder_timer = None
+
+    def on_dial_reminder_timeout(self):
+        print("Dial Reminder Timeout! Playing Reminder...")
+        if self.mode == SystemMode.CALL_SETUP and self.sender:
+            audio_files = ["ReminderToDial.wav"]
+            self.sender.play_async(audio_files)
+            
+            # Restart timer, accounting for length of reminder
+            duration = self.sender.get_duration(audio_files)
+            self.start_dial_reminder(extra_delay=duration)
+
+    def run_sub_case_conversation_intro(self):
+        print(f"--- CONVERSATION INTRO ---")
+
+        # 1. play intro
+        files = ["SenderIntro.wav"]
+        self.sender.play_async(files)
+
         # 2. wait for dialing
         self.dialed_number = "" # Reset buffer
         self.current_case_handler = self.run_sub_case_conversation_dial
-
-        #TODO: wat als hier al de hoorn van de haak is genomen?
+        
+        # Start Reminder Loop (Wait for intro to finish + 10s)
+        duration = self.sender.get_duration(files)
+        self.start_dial_reminder(extra_delay=duration)
 
     def run_sub_case_conversation_dial(self, event_type, phone, extra=None):        
         if event_type == "dial" and phone == self.sender:
+            # User interaction -> Reset timer loop (so it doesn't beep while dialing)
+            self.start_dial_reminder()
+            
             current_input = self.dialed_number
             print(f"Checking input: {current_input}")
              
             # Case: Valid Start ("0")
             if current_input == "0":
+                # Keep timer running (reset above) while waiting for next digit
                 return
 
             # Case: Valid Complete ("0" + something)
             elif current_input.startswith("0") and len(current_input) > 1:
                 # --- correct number ---
                 print(f"Valid Number: {current_input}")
+                self.stop_dial_reminder() # Success! Stop reminder.
                 self.run_sub_case_conversation_ring()
              
             # Case: Invalid (Doesn't start with 0)
@@ -434,6 +472,7 @@ class CallLogic:
                 print("Wrong Number (Must start with 0)")
                 #  self.sender.play_async(["WrongNumber.wav"])
                 self.dialed_number = "" # Reset
+                # Timer is already restarted above, so it will loop in 10s if idle
 
         elif event_type == "offhook" and phone == self.receiver:
              self.run_sub_case_conversation_starter()
