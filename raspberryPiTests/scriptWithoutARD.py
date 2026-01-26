@@ -17,6 +17,8 @@ import select
 import os
 import shutil
 from pathlib import Path
+import struct
+import math
 
 #------------------------ CONFIG/CONSTANTS/CLASSES ------------------------#
 dial_timeout = 1.0 # seconds
@@ -36,6 +38,7 @@ class SystemMode: # state of the whole system
     RINGING = "RINGING" # Waiting for pickup
     CONVERSATION = "CONVERSATION" # Case 1
     VOICEMAIL = "VOICEMAIL" # Case 2
+    VOICEMAIL_RECORDING = "VOICEMAIL_RECORDING"
 
 #------------------------ VARIABLES ------------------------#
 arduino_map = {}
@@ -178,10 +181,15 @@ class AudioChannel:
     def play(self, filename, stop_event):
         try:
             with wave.open(str(filename), 'rb') as wf:
-                # Validate file format (must be 8-bit mono 8000Hz)
-                if wf.getnchannels() != 1 or wf.getsampwidth() != 1:
-                    print(f"Error: {filename} must be 8-bit Mono.")
+                # Validate file format (Mono check)
+                if wf.getnchannels() != 1: 
+                    print(f"Error: {filename} must be Mono.")
                     return
+                
+                width = wf.getsampwidth()
+                if width not in [1, 2]:
+                     print(f"Error: {filename} must be 8-bit or 16-bit.")
+                     return
 
                 # Open stream: Stereo output, 8000Hz, 16-bit
                 stream = self.p.open(format=pyaudio.paInt16,
@@ -191,7 +199,6 @@ class AudioChannel:
                 
                 print(f"Playing {filename} on {self.name} ({self.channel_side})...")
                 
-                # Read larger chunks for better performance
                 chunk_size = 4096 
                 data = wf.readframes(chunk_size)
                 
@@ -199,8 +206,35 @@ class AudioChannel:
                     if stop_event.is_set():
                         break
                     
-                    # Use pre-computed lookup table for fast conversion
-                    stream.write(b"".join(self.lookup_table[b] for b in data))
+                    output_bytes = b""
+                    
+                    if width == 1:
+                        # 8-bit (0..255) -> Use lookup table
+                        output_bytes = b"".join(self.lookup_table[b] for b in data)
+                    else:
+                        # 16-bit Signed (little endian)
+                        # Read as shorts
+                        count = len(data) // 2
+                        shorts = struct.unpack(f"<{count}h", data)
+                        
+                        # Prepare stereo buffer
+                        stereo_data = bytearray()
+                        
+                        for sample in shorts:
+                            # sample is int (-32768..32767)
+                            sample_bytes = sample.to_bytes(2, byteorder='little', signed=True)
+                            silence_bytes = b'\x00\x00'
+                            
+                            if self.channel_side == 'left':
+                                stereo_data.extend(sample_bytes)
+                                stereo_data.extend(silence_bytes)
+                            else:
+                                stereo_data.extend(silence_bytes)
+                                stereo_data.extend(sample_bytes)
+                        
+                        output_bytes = bytes(stereo_data)
+
+                    stream.write(output_bytes)
                     
                     data = wf.readframes(chunk_size)
                 
@@ -209,6 +243,43 @@ class AudioChannel:
 
         except Exception as e:
             print(f"Error playing audio on {self.name}: {e}")
+
+    def record(self, filename, stop_event):
+        try:
+            chunk = 1024
+            format = pyaudio.paInt16
+            channels = 1
+            rate = 8000
+            
+            stream = self.p.open(format=format,
+                                 channels=channels,
+                                 rate=rate,
+                                 input=True,
+                                 frames_per_buffer=chunk)
+                                 
+            print(f"Recording to {filename} on {self.name}...")
+            
+            frames = []
+            
+            while not stop_event.is_set():
+                data = stream.read(chunk, exception_on_overflow=False)
+                frames.append(data)
+                
+            print(f"Recording Finished. Saving {filename}...")
+            
+            stream.stop_stream()
+            stream.close()
+            
+            # Save file
+            path = f"audio/{filename}"
+            with wave.open(path, 'wb') as wf:
+                wf.setnchannels(channels)
+                wf.setsampwidth(self.p.get_sample_size(format))
+                wf.setframerate(rate)
+                wf.writeframes(b''.join(frames))
+                
+        except Exception as e:
+            print(f"Error recording on {self.name}: {e}")
 
     def write(self, data):
         pass
@@ -299,7 +370,19 @@ class Phone:
                  while True:
                      data = wf.readframes(chunk_size)
                      if not data: break
-                     rms = audioop.rms(data, 2) # assuming 16-bit audio (2 bytes width)
+                     
+                     # Manual RMS calculation (since audioop is removed in 3.13+)
+                     # Assume 16-bit audio
+                     count = len(data) // 2
+                     if count == 0: continue
+                     
+                     # Unpack bytes to shorts (little-endian signed 16-bit)
+                     shorts = struct.unpack(f"<{count}h", data)
+                     
+                     # Calculate Root Mean Square
+                     sum_squares = sum(s**2 for s in shorts)
+                     rms = math.sqrt(sum_squares / count)
+                     
                      if rms > threshold:
                          return True
         except Exception as e:
@@ -311,6 +394,28 @@ class Phone:
         self.stop_event.set()
         if self.thread and self.thread.is_alive():
             self.thread.join(timeout=0.5)
+
+    def record_async(self, filename):
+        "Record audio in a background thread."
+        self.stop_audio()
+        self.stop_event.clear()
+        
+        def _record_task():
+            self.audio.record(filename, self.stop_event)
+            
+        self.thread = threading.Thread(target=_record_task)
+        self.thread.start()
+
+    def record_async(self, filename):
+        "Record audio in a background thread."
+        self.stop_audio()
+        self.stop_event.clear()
+        
+        def _record_task():
+            self.audio.record(filename, self.stop_event)
+            
+        self.thread = threading.Thread(target=_record_task)
+        self.thread.start()
 
     def set_state(self, new_state):
         print(f"Phone {self.number} State: {self.state} -> {new_state}")
@@ -359,7 +464,7 @@ class CallLogic:
             self.current_case_handler("is_offHook", phone)
         
         elif self.mode == SystemMode.VOICEMAIL and self.sender:
-            self.run_sub_case_voicemail_interuption(self.sender, phone)
+            self.run_sub_case_voicemail_interuption()
 
     #this will always trigger to go back to the IDLE state
     def onhook(self, phone):
@@ -385,6 +490,11 @@ class CallLogic:
         
         elif self.mode == SystemMode.VOICEMAIL_RECORDING: # e.g. stop recording
              # In VM case, we might check sender's dial
+             if self.current_case_handler:
+                 self.current_case_handler("dial", phone, extra=None)
+                 
+        elif self.mode == SystemMode.VOICEMAIL:
+             # Allow dialing during voicemail (e.g. Interruption Choice)
              if self.current_case_handler:
                  self.current_case_handler("dial", phone, extra=None)
         
@@ -520,7 +630,7 @@ class CallLogic:
         # --- receiver: play ring
 
         # Start Timer
-        self.ringing_timer = threading.Timer(15.0, self.run_sub_case_conversation_ring_timeout, [self.sender])
+        self.ringing_timer = threading.Timer(15.0, self.run_sub_case_conversation_ring_timeout)
         self.ringing_timer.start()
         
         self.current_case_handler = self.run_sub_case_conversation_wait_answer
@@ -590,49 +700,52 @@ class CallLogic:
         self.receiver.play_async(common)
         # TODO: Play beep tone
 
-    def run_sub_case_conversation_ring_timeout(self, phone):
-        print(f"--- CONVERSATION RING TIMEOUT ---")
-
-        # 1. stop ringing
-        print(f"Receiver: stop ringing")
-        # TODO: send signal to arduino to stop ringing
-
-        # 2. start voicemail
-        self.run_sub_case_voicemail_intro()
-
-    def run_sub_case_voicemail_intro(self):
-        print("--- VOICEMAIL INTRO ---")
+    def run_sub_case_conversation_ring_timeout(self):
+        print("--- CONVERSATION RING TIMEOUT ---")
+        self.receiver.play_async(["ReceiverCall3.wav"]) # "Receiver: stop ringing"
+        self.mode = SystemMode.VOICEMAIL
         
-        suffix = self.dial_buffer[self.sender.number][1:] if len(self.dial_buffer[self.sender.number]) > 1 else "default"
-        topic = f"topic-{suffix}.wav"
-        question = f"question-{suffix}.wav"
-
-        self.sender.play_async([
-            "SenderVoiceMail1.wav",
-            topic,
-            "SenderVoiceMail2.wav",
-            question,
-            "SenderVoiceMail3.wav",
-            ])
+        # Voicemail Flow:
+        # 1. Intro ("SenderVoiceMail1.wav")
+        # 2. Playback ("voicemail-{sender}-{topic}.wav")
+        # 3. Instruction ("SenderVoiceMail4.wav")
+        # 4. START RECORDING
         
-        self.run_sub_case_voicemail_playback()
-
-    def run_sub_case_voicemail_playback(self):
-        print("--- VOICEMAIL PLAYBACK ---")
-        topic = f"voicemail-{self.sender.name}-{self.dial_buffer[self.sender.number]}.wav"
-
-        self.sender.play_async([
-            topic,
-            "SenderVoiceMail4.wav"
-            ])
+        topic_suffix = self.dial_buffer[self.sender.number]
+        # Handle empty/short buffer safety
+        if len(topic_suffix) < 2: topic_suffix = "01"
+        else: topic_suffix = topic_suffix # e.g "01"
+        
+        # Note: logic uses "topic-{topic}.wav" but user said "voicemail-{sender}-{dialed}.wav" for playback?
+        # User snippet: f"voicemail-{self.sender.name}-{self.dial_buffer[self.sender.number]}.wav"
+        
+        vm_playback_file = f"voicemail-{self.sender.name}-{topic_suffix}.wav"
+        
+        # Audio Sequence
+        files = [
+            "SenderVoiceMail1.wav",  # Intro
+            vm_playback_file,        # "voicemail-T1-01.wav"
+            "SenderVoiceMail4.wav"   # "Leave a message..."
+        ]
+        
+        # Play all sequentially
+        print(f"Playing Voicemail Sequence on {self.sender.name}...")
+        self.sender.play_async(files)
+        
+        # Calculate when to start recording
+        duration = self.sender.get_duration(files)
+        print(f"Voicemail Audio Duration: {duration:.2f}s. Scheduling Recording...")
         
         # TODO: play BEEP TONE
 
-        self.run_sub_case_voicemail_record()
+        # Schedule Recording Start (STORE TIMER)
+        self.voicemail_start_timer = threading.Timer(duration + 0.5, self.run_sub_case_voicemail_record)
+        self.voicemail_start_timer.start()
 
     def run_sub_case_voicemail_record(self):
         print("--- VOICEMAIL RECORDING START ---")
         self.sender.set_state(PhoneState.VOICEMAIL_RECORDING)
+        self.mode = SystemMode.VOICEMAIL_RECORDING
         
         # Start Actual Recording
         # Record to a TEMP file first
@@ -708,9 +821,84 @@ class CallLogic:
 
     def run_sub_case_voicemail_interuption(self):
         print("--- VOICEMAIL INTERUPTION ---")
+        
+        # Store previous mode to resume later
+        self.previous_mode = self.mode
+        
+        # 1. Cancel Recording Timer if pending
+        if hasattr(self, 'recording_timer') and self.recording_timer:
+            self.recording_timer.cancel()
+        
+        # 2. Cancel Start Timer if pending (The initial wait one)
+        if hasattr(self, 'voicemail_start_timer') and self.voicemail_start_timer:
+            self.voicemail_start_timer.cancel()
+            
+        # 2. Stop Sender Audio / Recording
+        self.sender.stop_audio()
+        self.receiver.stop_audio()
+        
+        # 3. Reset Sender Buffer for choice
+        self.dial_buffer[self.sender.number] = ""
+        
+        print("Sender: dial 1 to Connect, 2 to Refuse")
+        self.sender.play_async(["SenderVoicemailIncomingCall.wav"])
+        
+        self.current_case_handler = self.run_sub_case_voicemail_interuption_choice
+
+    def run_sub_case_voicemail_interuption_choice(self, event_type, phone, extra=None):
+        if event_type == "dial" and phone == self.sender:
+             choice = self.dial_buffer[self.sender.number]
+             print(f"Interruption Choice: {choice}")
+             
+             if choice == "1":
+                 print("Choice 1: Connect - send to arduino")
+                 self.sender.play_async(["SenderRecieverVoicemailCall.wav"])
+                 self.run_sub_case_conversation_starter()
+                 
+             elif choice == "2":
+                 print("Choice 2: Refuse")
+                 self.sender.play_async(["SenderVoicemailRefusedCall.wav"])
+                 self.run_sub_case_voicemail_refuse()
+                 
+             elif len(choice) > 1:
+                 # Invalid or multi-digit? Reset
+                 self.dial_buffer[self.sender.number] = ""
 
     def run_sub_case_voicemail_refuse(self):
         print("--- VOICEMAIL REFUSE ---")
+        print("Playing Refusal Tone...")
+
+        self.receiver.play_async(["ReceiverVoicemailRefusedCall.wav"])
+        # Sender audio is already started in choice handler (SenderVoicemailRefusedCall.wav)
+        # We need to wait for it to finish then RESUME.
+        
+        # Reset Receiver State
+        self.receiver.set_state(PhoneState.IDLE)
+        
+        # Calculate delay based on "SenderVoicemailRefusedCall.wav"
+        files = ["SenderVoicemailRefusedCall.wav"]
+        duration = self.sender.get_duration(files)
+        
+        # Schedule Resume
+        print(f"Resuming Voicemail in {duration:.2f}s...")
+        threading.Timer(duration + 0.5, self.run_sub_case_voicemail_resume).start()
+
+    def run_sub_case_voicemail_resume(self):
+        print("--- RESUMING VOICEMAIL ---")
+        
+        # Check where we were
+        # If we were recording (VOICEMAIL_RECORDING), restart recording phase
+        if self.previous_mode == SystemMode.VOICEMAIL_RECORDING:
+            print("Was Recording -> Restarting Recording Phase")
+            # Maybe play "Please continue your message..."?
+            # User said "The recording should continue". 
+            # We'll just jump to record handler which starts with "VOICEMAIL RECORDING START"
+            self.run_sub_case_voicemail_record()
+        
+        else:
+            # Was in Intro/Playback -> Restart Sequence
+            print("Was in Intro -> Restarting Voicemail Sequence")
+            self.run_sub_case_conversation_ring_timeout()
     
     # --- Helper Functions --- #
     def get_other_phone(self, phone):
