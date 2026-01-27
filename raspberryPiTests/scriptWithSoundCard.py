@@ -7,6 +7,10 @@
 # one file -> ffmpeg -i "input.m4a" -ar 8000 -ac 1 -acodec pcm_u8 "output.wav"
 # check if convertion is right -> ffprobe output_filename.wav
 
+#understand the new code
+#recording don't stop after dialing a number
+#make sure the recording is saved if the phone gets back on hook
+
 #------------------------ IMPORTS ------------------------#
 import serial
 import serial.tools.list_ports
