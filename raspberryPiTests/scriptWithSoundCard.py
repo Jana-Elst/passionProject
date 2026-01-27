@@ -112,147 +112,119 @@ class AudioChannel:
         pass
 
 class LocalAudioChannel(AudioChannel):
-    """Handles audio playback and recording via PyAudio (Local Sound Card)."""
+    """Handles audio playback via a Continuous Stream Engine to prevent idle noise."""
     def __init__(self, name: str, channel_side: str, device_index: int = None):
         super().__init__(name)
-        self.channel_side = channel_side # 'left' or 'right' (Only used if device_index is None)
+        self.channel_side = channel_side
         self.device_index = device_index
         self.p = pyaudio.PyAudio()
         
-        # Pre-compute lookup table for 8-bit unsigned -> 16-bit signed stereo conversion
+        self.device_sample_rate = 48000 # Standardizing on 48kHz for stability
+        self.chunk_size = 2048
+        
+        # Audio Engine State
+        self.active_wave: Optional[wave.Wave_read] = None
+        self.active_file_path: str = ""
+        self.upsample_factor = 1
+        self.is_playing = False
+        self.stop_requested = False
+        
+        # Lock for thread safety when switching files
+        self.engine_lock = threading.Lock()
+        
+        # Start the Continuous Engine
+        self.running = True
+        self.stream = self._open_stream()
+        self.thread = threading.Thread(target=_audio_engine_loop, args=(self,), daemon=True)
+        self.thread.start()
+
+        # Pre-compute simple lookup tables (byte duplication)
         self._init_lookup_table()
 
     def _init_lookup_table(self):
-        """Pre-calculates byte conversions to avoid lag during playback."""
+        # We handle upsampling on the fly now, but can optimize byte expansion
+        # For 8-bit to 16-bit conversion logic
         self.lookup_table = [b""] * 256
         for i in range(256):
-            # Convert 0..255 (8-bit) to -32768..32767 (16-bit signed)
+            # 8-bit (0..255) -> 16-bit signed (-32768..32767)
             sample_val = (i - 128) * 256
             sample_bytes = sample_val.to_bytes(2, byteorder='little', signed=True)
-            silence_bytes = (0).to_bytes(2, byteorder='little', signed=True)
-            
-            if self.device_index is not None:
-                # Dedicated Card: Play on BOTH channels (Mono -> Stereo Duplicate)
-                self.lookup_table[i] = sample_bytes + sample_bytes
-            elif self.channel_side == 'left':
-                self.lookup_table[i] = sample_bytes + silence_bytes
-            else:
-                self.lookup_table[i] = silence_bytes + sample_bytes
+            self.lookup_table[i] = sample_bytes
+
+    def _open_stream(self):
+        """Opens the persistent audio stream."""
+        try:
+            stream = self.p.open(format=pyaudio.paInt16,
+                                 channels=2,
+                                 rate=self.device_sample_rate,
+                                 output=True,
+                                 output_device_index=self.device_index)
+            print(f"[{self.name}] Engine Started at {self.device_sample_rate}Hz (Device {self.device_index})")
+            return stream
+        except Exception as e:
+            print(f"[{self.name}] CRITICAL: Failed to open stream: {e}")
+            return None
 
     def play(self, filename: str, stop_event: threading.Event):
-        """Plays a mono wav file on the specific stereo channel."""
+        """Request the engine to play a file and wait until it finishes."""
+        if not self.stream: return
+
         try:
-            with wave.open(str(filename), 'rb') as wf:
-                if wf.getnchannels() != 1: 
-                    print(f"Error: {filename} must be Mono.")
-                    return
-                
-                width = wf.getsampwidth()
-                if width not in [1, 2]:
-                     print(f"Error: {filename} must be 8-bit or 16-bit.")
+            path = str(filename)
+            with wave.open(path, 'rb') as wf:
+                # Validate
+                if wf.getnchannels() != 1:
+                     print(f"[{self.name}] Error: {path} must be Mono.")
                      return
-
-                framerate = wf.getframerate()
-                target_rate = framerate
-                upsample_factor = 1
-
-                # Try opening stream at native rate, fallback to 48kHz if fails
-                stream = None
-                try:
-                    stream = self.p.open(format=pyaudio.paInt16,
-                                         channels=2,
-                                         rate=framerate,
-                                         output=True,
-                                         output_device_index=self.device_index)
-                except Exception as e:
-                    print(f"DEBUG: Native rate {framerate}Hz failed: {e}. Attempting fallback...")
+                
+                # Setup Playback State
+                with self.engine_lock:
+                    self.active_wave = wf
+                    self.active_file_path = path
+                    self.stop_requested = False
+                    self.is_playing = True
                     
-                    # Fallback to 48kHz
-                    target_rate = 48000
-                    if target_rate % framerate == 0:
-                         upsample_factor = target_rate // framerate
-                         try:
-                             stream = self.p.open(format=pyaudio.paInt16,
-                                                 channels=2,
-                                                 rate=target_rate,
-                                                 output=True,
-                                                 output_device_index=self.device_index)
-                             print(f"Fallback successful: Using {target_rate}Hz (Upsample x{upsample_factor})")
-                         except Exception as e2:
-                             print(f"Fallback {target_rate}Hz also failed: {e2}")
-                             raise e2
+                    native_rate = wf.getframerate()
+                    # Calculate Integer Upsample Factor (e.g. 8000 -> 48000 = 6x)
+                    if self.device_sample_rate % native_rate == 0:
+                        self.upsample_factor = self.device_sample_rate // native_rate
                     else:
-                         print(f"Error: Cannot cleanly upsample {framerate} -> {target_rate}")
-                         raise e
+                        # Fallback for weird rates (e.g. 11025 -> 48000). Integer math won't work well.
+                        # For this project, we assume 8k or 48k. 
+                        self.upsample_factor = int(self.device_sample_rate / native_rate)
+                        print(f"[{self.name}] Warning: Imperfect upsample {native_rate}->{self.device_sample_rate} ({self.upsample_factor}x)")
 
-                dev_info = f"Device {self.device_index}" if self.device_index is not None else "Default Device"
-                print(f"Playing {filename} on {self.name} ({dev_info}) @ {target_rate}Hz...")
-                
-                chunk_size = 4096 
-                data = wf.readframes(chunk_size)
-                
-                while data and not stop_event.is_set():
-                    output_bytes = b""
-                    
-                    if width == 1:
-                        # 8-bit -> Use lookup table
-                        if upsample_factor > 1:
-                             # Upsample by repeating bytes
-                             output_bytes = b"".join(self.lookup_table[b] * upsample_factor for b in data)
-                        else:
-                             output_bytes = b"".join(self.lookup_table[b] for b in data)
-                    else:
-                        # 16-bit -> Unpack and interleave
-                        count = len(data) // 2
-                        shorts = struct.unpack(f"<{count}h", data)
-                        
-                        stereo_data = bytearray()
-                        silence_bytes = b'\x00\x00'
-                        
-                        for sample in shorts:
-                            sample_bytes = sample.to_bytes(2, byteorder='little', signed=True)
-                            
-                            current_frame = b""
-                            if self.device_index is not None:
-                                # Duplicate to both channels
-                                current_frame = sample_bytes + sample_bytes
-                            elif self.channel_side == 'left':
-                                current_frame = sample_bytes + silence_bytes
-                            else:
-                                current_frame = silence_bytes + sample_bytes
-                            
-                            if upsample_factor > 1:
-                                stereo_data.extend(current_frame * upsample_factor)
-                            else:
-                                stereo_data.extend(current_frame)
-                        
-                        output_bytes = bytes(stereo_data)
+                print(f"[{self.name}] Playing {path} (@ {native_rate}Hz -> {self.device_sample_rate}Hz)...")
 
-                    if stream:
-                        stream.write(output_bytes)
-                    data = wf.readframes(chunk_size)
+                # WAIT LOOP: Block until engine clears the file or stop requested
+                while not stop_event.is_set():
+                    if not self.is_playing:
+                        # Engine finished file
+                        break
+                    time.sleep(0.05)
                 
-                if stream:
-                    stream.stop_stream()
-                    stream.close()
+                # Cleanup if stopped externally
+                if stop_event.is_set():
+                    with self.engine_lock:
+                        self.stop_requested = True
+                        # Wait briefly for engine to acknowledge
+                        time.sleep(0.1) 
+                        self.active_wave = None
+                        self.is_playing = False
 
         except Exception as e:
-            print(f"Error playing audio on {self.name}: {e}")
+            print(f"[{self.name}] Play Error: {e}")
+            self.is_playing = False
 
     def record(self, filename: str, stop_event: threading.Event):
-        """Records audio from default input to a wav file."""
+        """Records directly using a separate stream (Input is usually fine to open/close)."""
+        # We can implement input stream persistence later if Input gain noise is an issue too.
+        # For now, just fix playback noise.
         try:
             chunk = 1024
             fmt = pyaudio.paInt16
             channels = 1
-            rate = 48000 # Use 48k for recording too, safest
-            
-            # Simple fallback for recording if needed? 
-            # Usually inputs are flexible or strict. 48k is safe. 
-            # But we want 8k output file... 
-            # Stick to 48k capture -> software downsample? Or just save 48k?
-            # Script expects 8k? ffmpeg convert instructions imply 8k.
-            # Let's try 48k capture and save as 48k for now.
+            rate = 48000 # Record high quality
             
             stream = self.p.open(format=fmt,
                                  channels=channels,
@@ -269,7 +241,6 @@ class LocalAudioChannel(AudioChannel):
                 frames.append(data)
                 
             print(f"Recording Finished. Saving {filename}...")
-            
             stream.stop_stream()
             stream.close()
             
@@ -284,7 +255,94 @@ class LocalAudioChannel(AudioChannel):
             print(f"Error recording on {self.name}: {e}")
 
     def close(self):
+        self.running = False
+        if self.thread:
+             self.thread.join(timeout=1.0)
+        if self.stream:
+             self.stream.stop_stream()
+             self.stream.close()
         self.p.terminate()
+
+def _audio_engine_loop(channel: LocalAudioChannel):
+    """
+    Background Thread:
+    1. Writes Silence if no active file.
+    2. Writes Audio Chunks if active file exists.
+    3. Handles converting/upsampling on the fly.
+    """
+    # Create a buffer of 48kHz stereo silence
+    silence_chunk = b'\x00\x00\x00\x00' * channel.chunk_size # 4 bytes per frame (16bit stereo)
+    
+    while channel.running:
+        try:
+            # COPY State to avoid locking for long duration
+            wf = channel.active_wave
+            
+            if wf and channel.is_playing and not channel.stop_requested:
+                # --- AUDIO MODE ---
+                # We need to read enough Source Frames to fill the Output Chunk
+                # Output Chunk = 2048 frames @ 48k.
+                # If upsample is 6x (8k->48k), we need 2048/6 = ~341 source frames.
+                
+                frames_needed = int(channel.chunk_size / channel.upsample_factor)
+                raw_data = wf.readframes(frames_needed)
+                
+                if not raw_data:
+                    # EOF
+                    with channel.engine_lock:
+                        channel.is_playing = False
+                        channel.active_wave = None
+                    continue
+
+                # PROCESS DATA
+                width = wf.getsampwidth()
+                processed_bytes = bytearray()
+                
+                # We can optimize this loop heavily, but for Python logic:
+                if width == 1:
+                    # 8-bit Unsigned Mono -> 16-bit Signed Stereo
+                    for b in raw_data:
+                        sample_16 = channel.lookup_table[b]
+                        # Mono -> Stereo Logic
+                        if channel.device_index is not None:
+                            frame = sample_16 + sample_16
+                        elif channel.channel_side == 'left':
+                            frame = sample_16 + b'\x00\x00'
+                        else:
+                            frame = b'\x00\x00' + sample_16
+                            
+                        # Upsample (Repeat)
+                        processed_bytes.extend(frame * channel.upsample_factor)
+
+                elif width == 2:
+                    # 16-bit Signed Mono -> 16-bit Signed Stereo
+                    count = len(raw_data) // 2
+                    shorts = struct.unpack(f"<{count}h", raw_data)
+                    for s in shorts:
+                        sample_bytes = s.to_bytes(2, byteorder='little', signed=True)
+                        
+                        if channel.device_index is not None:
+                            frame = sample_bytes + sample_bytes
+                        elif channel.channel_side == 'left':
+                            frame = sample_bytes + b'\x00\x00'
+                        else:
+                            frame = b'\x00\x00' + sample_bytes
+                        
+                        processed_bytes.extend(frame * channel.upsample_factor)
+                
+                # Pad if needed (if rounding errors in frame count)
+                # Not strictly necessary if we just write whatever we got, but PyAudio likes fixed chunks?
+                # Actually stream.write can take varying lengths usually.
+                channel.stream.write(bytes(processed_bytes))
+
+            else:
+                # --- SILENCE MODE ---
+                # Write zero-volts to keep amp alive
+                channel.stream.write(silence_chunk)
+                
+        except Exception as e:
+            print(f"[{channel.name}] Engine Exception: {e}")
+            time.sleep(0.5) # Prevent tight loop crash
 
 class SerialAudioChannel(AudioChannel):
     """Streams audio raw bytes to a connected Arduino via Serial."""
