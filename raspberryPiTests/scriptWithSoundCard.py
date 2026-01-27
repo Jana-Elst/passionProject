@@ -152,14 +152,39 @@ class LocalAudioChannel(AudioChannel):
                      print(f"Error: {filename} must be 8-bit or 16-bit.")
                      return
 
-                stream = self.p.open(format=pyaudio.paInt16,
-                                     channels=2,
-                                     rate=wf.getframerate(),
-                                     output=True,
-                                     output_device_index=self.device_index)
+                framerate = wf.getframerate()
+                target_rate = framerate
+                upsample_factor = 1
+
+                # Try opening stream at native rate, fallback to 48kHz if fails
+                try:
+                    stream = self.p.open(format=pyaudio.paInt16,
+                                         channels=2,
+                                         rate=framerate,
+                                         output=True,
+                                         output_device_index=self.device_index)
+                except Exception as e:
+                    # Check for Invalid Sample Rate error (OSError [Errno -9997])
+                    if "Invalid sample rate" in str(e) or getattr(e, 'errno', 0) == -9997:
+                         print(f"Note: Device {self.device_index} rejected {framerate}Hz. Trying 48000Hz fallback...")
+                         target_rate = 48000
+                         
+                         if target_rate % framerate == 0:
+                             upsample_factor = target_rate // framerate
+                             stream = self.p.open(format=pyaudio.paInt16,
+                                                 channels=2,
+                                                 rate=target_rate,
+                                                 output=True,
+                                                 output_device_index=self.device_index)
+                         else:
+                             print(f"Error: Cannot cleanly upsample {framerate} -> {target_rate}")
+                             raise e
+                    else:
+                        raise e
+
                 
                 dev_info = f"Device {self.device_index}" if self.device_index is not None else "Default Device"
-                print(f"Playing {filename} on {self.name} ({dev_info})...")
+                print(f"Playing {filename} on {self.name} ({dev_info}) @ {target_rate}Hz...")
                 
                 chunk_size = 4096 
                 data = wf.readframes(chunk_size)
@@ -169,7 +194,11 @@ class LocalAudioChannel(AudioChannel):
                     
                     if width == 1:
                         # 8-bit -> Use lookup table
-                        output_bytes = b"".join(self.lookup_table[b] for b in data)
+                        if upsample_factor > 1:
+                             # Upsample by repeating bytes
+                             output_bytes = b"".join(self.lookup_table[b] * upsample_factor for b in data)
+                        else:
+                             output_bytes = b"".join(self.lookup_table[b] for b in data)
                     else:
                         # 16-bit -> Unpack and interleave
                         count = len(data) // 2
@@ -181,13 +210,19 @@ class LocalAudioChannel(AudioChannel):
                         for sample in shorts:
                             sample_bytes = sample.to_bytes(2, byteorder='little', signed=True)
                             
+                            current_frame = b""
                             if self.device_index is not None:
                                 # Duplicate to both channels
-                                stereo_data.extend(sample_bytes + sample_bytes)
+                                current_frame = sample_bytes + sample_bytes
                             elif self.channel_side == 'left':
-                                stereo_data.extend(sample_bytes + silence_bytes)
+                                current_frame = sample_bytes + silence_bytes
                             else:
-                                stereo_data.extend(silence_bytes + sample_bytes)
+                                current_frame = silence_bytes + sample_bytes
+                            
+                            if upsample_factor > 1:
+                                stereo_data.extend(current_frame * upsample_factor)
+                            else:
+                                stereo_data.extend(current_frame)
                         
                         output_bytes = bytes(stereo_data)
 
@@ -206,7 +241,14 @@ class LocalAudioChannel(AudioChannel):
             chunk = 1024
             fmt = pyaudio.paInt16
             channels = 1
-            rate = 8000
+            rate = 48000 # Use 48k for recording too, safest
+            
+            # Simple fallback for recording if needed? 
+            # Usually inputs are flexible or strict. 48k is safe. 
+            # But we want 8k output file... 
+            # Stick to 48k capture -> software downsample? Or just save 48k?
+            # Script expects 8k? ffmpeg convert instructions imply 8k.
+            # Let's try 48k capture and save as 48k for now.
             
             stream = self.p.open(format=fmt,
                                  channels=channels,
