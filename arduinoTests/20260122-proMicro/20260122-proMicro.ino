@@ -7,11 +7,11 @@ MONITOR
   - When a phone DIALS a DIGIT (0-9)                            TX_N1   ...
 
 Things the PI can do:
-  - Connect/Disconnect the two phone lines via a relay          (R1_ON / R1_OFF)
+  - Connect/Disconnect the two phone lines via a relay          (R1_OPEN / R1_CLOSE)
 */
 
 //--- PINS
-const int relaysPin = 10;
+const int R1_PIN = 10;
 const int measurePinT1 = A1;
 const int measurePinT2 = A2;
 
@@ -48,16 +48,14 @@ PhoneState phoneStates[2] = {
     {false, 0, false, 0, false}  // T2
 };
 
-bool globalRelayState = false;
-unsigned long lastRelayAction = 0;
 const int RelayStabilityPause =
     200; // Wait after connection before allowing break (ms)
 
 //------------------------ SETUP ------------------------//
 void setup() {
   Serial.begin(1000000);
-  pinMode(relaysPin, OUTPUT);
-  digitalWrite(relaysPin, LOW);
+  pinMode(R1_PIN, OUTPUT);
+  digitalWrite(R1_PIN, LOW);
 }
 
 //--- STATE & VARIABLES
@@ -74,17 +72,17 @@ void loop() {
     isConnected = true;
   }
 
-  //--- 1. Read the lines
+  //--- 1. Check Serial Commands
+  checkSerialCommands();
+
+  //--- 2. Read the lines
   int valueT1 = analogRead(measurePinT1);
   int valueT2 = analogRead(measurePinT2);
 
-  //--- 2. Get all information from the lines
+  //--- 3. Get all information from the lines
   // On/off hook state & dialed digits
   processLine(valueT1, T1);
   processLine(valueT2, T2);
-
-  //--- 3. Control the Relay
-  // controlRelay();
 }
 
 //------------------------ Give handshake to the PI ------------------------//
@@ -170,27 +168,19 @@ void processLine(int value, int phoneID) {
   }
 }
 
-//------------------------ RELAY CONTROL ------------------------//
-//--- THIS SHOULD BE CHANGING BASED WHAT THE PI IS SENDING ---//
-void controlRelay() {
-  // A phone is "In Use" if it is Off-Hook and NOT currently in the middle of a
-  // pulse break
-  bool t1Active = phoneStates[T1].isOffHook && !phoneStates[T1].inPulse;
-  bool t2Active = phoneStates[T2].isOffHook && !phoneStates[T2].inPulse;
+//------------------------ SERIAL COMMANDS ------------------------//
+void checkSerialCommands() {
+  if (Serial.available() > 0) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
 
-  bool enableRelay = (t1Active && t2Active);
-
-  // Add a lockout: Don't flip relay if someone is actively pulsing/dialing
-  bool anyoneIsPulsing = phoneStates[T1].inPulse || phoneStates[T2].inPulse;
-
-  if (!anyoneIsPulsing && enableRelay != globalRelayState) {
-    // Extra debounce: Ensure we don't rapid-fire the relay
-    if (millis() - lastRelayAction > RelayStabilityPause) {
-      globalRelayState = enableRelay;
-      digitalWrite(relaysPin, globalRelayState ? HIGH : LOW);
-      lastRelayAction = millis();
-      Serial.println(globalRelayState ? ">>> PHONES CONNECTED"
-                                      : ">>> PHONES DISCONNECTED");
+    // "R1_OPEN" = Open the channel / Connect the phones (Relay HIGH)
+    if (cmd == "R1_OPEN") {
+      digitalWrite(R1_PIN, HIGH);
+    }
+    // "R1_CLOSE" = Close the channel / Disconnect (Relay LOW)
+    else if (cmd == "R1_CLOSE") {
+      digitalWrite(R1_PIN, LOW);
     }
   }
 }

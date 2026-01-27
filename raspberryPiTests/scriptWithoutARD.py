@@ -337,6 +337,9 @@ class PhoneSystem:
         self.t2 = Phone("2", device_map.get("T2"))
         self.phones = {"1": self.t1, "2": self.t2}
         
+        # Serial Connection
+        self.main_serial = device_map.get("MAIN")
+        
         # System State
         self.mode = SystemMode.IDLE
         self.sender: Optional[Phone] = None
@@ -415,6 +418,11 @@ class PhoneSystem:
     def on_onhook(self, phone: Phone):
         phone.stop_audio()
         phone.set_state(PhoneState.IDLE)
+
+        # send R1_CLOSE to arduino
+        print("Sending R1_CLOSE to Arduino...")
+        if self.main_serial:
+            self.main_serial.write(b"R1_CLOSE\n")
         
         # Reset System if both phones are idle
         other = self.get_other_phone(phone)
@@ -577,6 +585,10 @@ class PhoneSystem:
 
     def run_sub_case_conversation_together(self, question: str):
         print("--- CONVERSATION TOGETHER PART ---")
+        print("Sending R1_OPEN to Arduino...")
+        if self.main_serial:
+            self.main_serial.write(b"R1_OPEN\n")
+
         common = [question, "SenderReceiverCall4.wav"]
         self.sender.play_async(common)
         self.receiver.play_async(common)
