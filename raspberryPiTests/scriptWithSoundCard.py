@@ -157,6 +157,7 @@ class LocalAudioChannel(AudioChannel):
                 upsample_factor = 1
 
                 # Try opening stream at native rate, fallback to 48kHz if fails
+                stream = None
                 try:
                     stream = self.p.open(format=pyaudio.paInt16,
                                          channels=2,
@@ -164,25 +165,26 @@ class LocalAudioChannel(AudioChannel):
                                          output=True,
                                          output_device_index=self.device_index)
                 except Exception as e:
-                    # Check for Invalid Sample Rate error (OSError [Errno -9997])
-                    if "Invalid sample rate" in str(e) or getattr(e, 'errno', 0) == -9997:
-                         print(f"Note: Device {self.device_index} rejected {framerate}Hz. Trying 48000Hz fallback...")
-                         target_rate = 48000
-                         
-                         if target_rate % framerate == 0:
-                             upsample_factor = target_rate // framerate
+                    print(f"DEBUG: Native rate {framerate}Hz failed: {e}. Attempting fallback...")
+                    
+                    # Fallback to 48kHz
+                    target_rate = 48000
+                    if target_rate % framerate == 0:
+                         upsample_factor = target_rate // framerate
+                         try:
                              stream = self.p.open(format=pyaudio.paInt16,
                                                  channels=2,
                                                  rate=target_rate,
                                                  output=True,
                                                  output_device_index=self.device_index)
-                         else:
-                             print(f"Error: Cannot cleanly upsample {framerate} -> {target_rate}")
-                             raise e
+                             print(f"Fallback successful: Using {target_rate}Hz (Upsample x{upsample_factor})")
+                         except Exception as e2:
+                             print(f"Fallback {target_rate}Hz also failed: {e2}")
+                             raise e2
                     else:
-                        raise e
+                         print(f"Error: Cannot cleanly upsample {framerate} -> {target_rate}")
+                         raise e
 
-                
                 dev_info = f"Device {self.device_index}" if self.device_index is not None else "Default Device"
                 print(f"Playing {filename} on {self.name} ({dev_info}) @ {target_rate}Hz...")
                 
@@ -226,11 +228,13 @@ class LocalAudioChannel(AudioChannel):
                         
                         output_bytes = bytes(stereo_data)
 
-                    stream.write(output_bytes)
+                    if stream:
+                        stream.write(output_bytes)
                     data = wf.readframes(chunk_size)
                 
-                stream.stop_stream()
-                stream.close()
+                if stream:
+                    stream.stop_stream()
+                    stream.close()
 
         except Exception as e:
             print(f"Error playing audio on {self.name}: {e}")
