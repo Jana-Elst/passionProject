@@ -51,7 +51,7 @@ class SystemMode:
 AUDIO_DIR = "audio"
 DEFAULT_BAUDRATE = 1000000
 DIAL_TIMEOUT = 1.0  # seconds
-VOLUME_MULTIPLIER = 5.0  # Increase this to make sound louder
+VOLUME_MULTIPLIER = 10.0  # Increase this to make sound louder
 
 #------------------------ HARDWARE ABSTRACTION ------------------------#
 class TerminalAdapter:
