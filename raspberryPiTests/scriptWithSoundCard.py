@@ -11,6 +11,11 @@
 #recording don't stop after dialing a number
 #make sure the recording is saved if the phone gets back on hook
 
+#------------------------ SENDED COMMANDS ------------------------#
+# Things the PI can do:
+#   - Connect/Disconnect the two phone lines via a relay          (R1_OPEN / R1_CLOSE)
+#   - Open close bell circuit                                     (TX_BELL_START / TX_BELL_STOP)
+
 #------------------------ IMPORTS ------------------------#
 import serial
 import serial.tools.list_ports
@@ -733,8 +738,11 @@ class PhoneSystem:
     def run_sub_case_conversation_ring(self):
         print(f"--- CONVERSATION RING ---")
         self.sender.play_async(["SenderDialedNumber.wav"])
-        # Receiver ringing is handled by hardware usually, or we play audio?
-        # Original code had comments: # receiver: play ring
+
+        #START RINGING
+        print(f"Sending {self.receiver.name}_BELL_START to Arduino...")
+        if self.main_serial:
+            self.main_serial.write(f"{self.receiver.name}_BELL_START\n".encode('utf-8'))
         
         self.start_timer("ringing_timeout", 15.0, self.run_sub_case_conversation_ring_timeout)
         self.current_case_handler = self.run_sub_case_conversation_wait_answer
@@ -742,6 +750,12 @@ class PhoneSystem:
     def run_sub_case_conversation_wait_answer(self, event_type: str, phone: Phone, extra=None):
         if event_type == "is_offHook" and phone == self.receiver:
             self.stop_timer("ringing_timeout")
+
+            # STOP RINGING
+            print(f"Sending {self.receiver.name}_BELL_STOP to Arduino...")
+            if self.main_serial:
+                self.main_serial.write(f"{self.receiver.name}_BELL_STOP\n".encode('utf-8'))
+
             self.run_sub_case_conversation_starter()
 
     def run_sub_case_conversation_starter(self):
@@ -801,6 +815,12 @@ class PhoneSystem:
     # 2. Voicemail Flow
     def run_sub_case_conversation_ring_timeout(self):
         print("--- CONVERSATION RING TIMEOUT (VOICEMAIL) ---")
+
+        # STOP RINGING
+        print(f"Sending {self.receiver.name}_BELL_STOP to Arduino...")
+        if self.main_serial:
+            self.main_serial.write(f"{self.receiver.name}_BELL_STOP\n".encode('utf-8'))
+
         self.mode = SystemMode.VOICEMAIL
         
         dialed_suffix = self.question
