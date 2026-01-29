@@ -79,6 +79,10 @@ void loop() {
   int valueT1 = analogRead(measurePinT1);
   int valueT2 = analogRead(measurePinT2);
 
+  // Serial.print(valueT1);
+  // Serial.print(" | ");
+  // Serial.println(valueT2);
+
   //--- 3. Get all information from the lines
   // On/off hook state & dialed digits
   processLine(valueT1, T1);

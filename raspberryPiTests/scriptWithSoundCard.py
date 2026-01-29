@@ -51,6 +51,7 @@ class SystemMode:
 AUDIO_DIR = "audio"
 DEFAULT_BAUDRATE = 1000000
 DIAL_TIMEOUT = 1.0  # seconds
+VOLUME_MULTIPLIER = 5.0  # Increase this to make sound louder
 
 #------------------------ HARDWARE ABSTRACTION ------------------------#
 class TerminalAdapter:
@@ -151,8 +152,16 @@ class LocalAudioChannel(AudioChannel):
         self.lookup_table = [b""] * 256
         for i in range(256):
             # 8-bit (0..255) -> 16-bit signed (-32768..32767)
-            sample_val = (i - 128) * 256
-            sample_bytes = sample_val.to_bytes(2, byteorder='little', signed=True)
+            raw_val = (i - 128) * 256
+            
+            # Apply Volume Boost
+            boosted_val = int(raw_val * VOLUME_MULTIPLIER)
+            
+            # Clamp to 16-bit signed range
+            if boosted_val > 32767: boosted_val = 32767
+            if boosted_val < -32768: boosted_val = -32768
+            
+            sample_bytes = boosted_val.to_bytes(2, byteorder='little', signed=True)
             self.lookup_table[i] = sample_bytes
 
     def _open_stream(self):
@@ -323,7 +332,13 @@ def _audio_engine_loop(channel: LocalAudioChannel):
                     count = len(raw_data) // 2
                     shorts = struct.unpack(f"<{count}h", raw_data)
                     for s in shorts:
-                        sample_bytes = s.to_bytes(2, byteorder='little', signed=True)
+                        # Apply Volume Boost
+                        val = int(s * VOLUME_MULTIPLIER)
+                        # Clamp
+                        if val > 32767: val = 32767
+                        if val < -32768: val = -32768
+
+                        sample_bytes = val.to_bytes(2, byteorder='little', signed=True)
                         
                         if channel.device_index is not None:
                             frame = sample_bytes + sample_bytes
