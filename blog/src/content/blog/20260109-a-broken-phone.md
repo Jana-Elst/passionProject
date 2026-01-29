@@ -3,7 +3,7 @@ title: '#7 A broken phone'
 description: |
   The most frustrating day of the week...
   The on/off hook switch of the RTT56B isn't working
-  (or did he never worked correctly?)
+  (or did it never work correctly?)
 pubDate: 'Jan 9 2026'
 heroImage: '../../assets/pictures/20260109-oxidated-wire.png'
 sources:
@@ -19,7 +19,7 @@ What is wrong with my RTT56B? Sometimes the on/off hook switch is always on-hook
 I tried a lot of things to fix the problem... but everything I checked seems to be working fine. So the only thing left to do is clean the contacts of the leaf switch. Hopefully, this will fix the problem. But during the day, I had some little panics...
 
 ## Panic 1: Oxidized wires
-The sides of my wires are oxidized, which means they are not conductive anymore around the sides. If the wires oxidize more and become oxidized on the inside, I will have to replace them...
+The sides of my wires are oxidized, which means they are no longer conductive on the outside. If the wires oxidize more and become oxidized on the inside, I will have to replace them...
 
 I tried to do it with one, but that wasn't a great idea. The soldering is so old that the outside of it is oxidized as well. Heating it with the soldering iron didn't work, I just couldn't get the contacts desoldered. But since my phone works every now and then, and the inside of the cables didn't look oxidized, I decided not to change the cables after all.
 
