@@ -33,9 +33,9 @@ struct PhoneConfig {
 };
 
 const PhoneConfig phoneConfigs[2] = {
-    // pickupThreshold, hangupThreshold, timeout(ms)
-    {150, 80, 600}, // T1
-    {150, 80, 600}  // T2
+    // pickupThreshold (High/Rising), hangupThreshold (Low/Falling), timeout(ms)
+    {45, 20, 600}, // T1 (Off-hook: ~60-65, Bottom: ~10)
+    {60, 30, 600}  // T2 (Off-hook: ~80-90)
 };
 
 //--- STATE & VARIABLES
@@ -91,12 +91,12 @@ bool isConnected = false;
 void loop() {
   //--- 0. Handshake
   // If we haven't established a connection yet, wait for it.
-  if (!isConnected) {
-    while (!handshake()) {
-      delay(100);
-    }
-    isConnected = true;
-  }
+  // if (!isConnected) {
+  //   while (!handshake()) {
+  //     delay(100);
+  //   }
+  //   isConnected = true;
+  // }
 
   //--- 1. Check Serial Commands
   checkSerialCommands();
@@ -111,7 +111,7 @@ void loop() {
 
   // Serial.print(valueT1);
   // Serial.print(" | ");
-  // Serial.println(valueT2);
+  // Serial.print(valueT2);
 
   //--- 3. Get all information from the lines
   // On/off hook state & dialed digits
