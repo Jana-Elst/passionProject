@@ -589,7 +589,11 @@ class PhoneSystem:
         self.sender = None
         self.receiver = None
         self.question = None
-        
+
+        #Stop ringing
+        self.main_serial.write(f"T1_BELL_STOP\n".encode('utf-8'))
+        self.main_serial.write(f"T2_BELL_STOP\n".encode('utf-8'))
+    
         # Stop all timers
         for name in list(self.timers.keys()):
             self.stop_timer(name)
@@ -633,6 +637,16 @@ class PhoneSystem:
         print("Sending R1_CLOSE to Arduino...")
         if self.main_serial:
             self.main_serial.write(b"R1_CLOSE\n")
+
+        #Send T1_BELL_STOP to arduino
+        print("Sending T1_BELL_STOP to Arduino...")
+        if self.main_serial:
+            self.main_serial.write(b"T1_BELL_STOP\n")
+
+        #Send T2_BELL_STOP to arduino
+        print("Sending T2_BELL_STOP to Arduino...")
+        if self.main_serial:
+            self.main_serial.write(b"T2_BELL_STOP\n")
         
         # Reset System if both phones are idle
         other = self.get_other_phone(phone)
