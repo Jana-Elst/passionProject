@@ -66,7 +66,7 @@ class SystemMode:
 AUDIO_DIR = "audio"
 DEFAULT_BAUDRATE = 1000000
 DIAL_TIMEOUT = 1.0  # seconds
-VOLUME_MULTIPLIER = 100.0  # Increase this to make sound louder
+VOLUME_MULTIPLIER = 1.0  # Keep close to 1.0. Higher values causes distortion (clipping). Increase SYSTEM VOLUME instead!
 
 #------------------------ HARDWARE ABSTRACTION ------------------------#
 class TerminalAdapter:
