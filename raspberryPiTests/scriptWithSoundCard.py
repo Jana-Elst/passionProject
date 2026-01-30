@@ -5,8 +5,9 @@
 # REQUIRED FORMAT: WAV, 8000Hz, Mono, 8-bit Unsigned PCM (pcm_u8)
 # This format is required for compatibility with the Arduino Serial streaming.
 # brew install ffmpeg
-# whole folder -> for f in *.m4a; do ffmpeg -i "$f" -ar 8000 -ac 1 -c:a pcm_u8 "${f%.m4a}.wav"; done
-# one file -> ffmpeg -i "input.m4a" -ar 8000 -ac 1 -c:a pcm_u8 "output.wav"
+# whole folder (m4a) -> for f in *.m4a; do ffmpeg -i "$f" -ar 8000 -ac 1 -c:a pcm_u8 "${f%.m4a}.wav"; done
+# one file (m4a) -> ffmpeg -i "input.m4a" -ar 8000 -ac 1 -c:a pcm_u8 "output.wav"
+# one file (wav) -> ffmpeg -i "input.wav" -ar 8000 -ac 1 -c:a pcm_u8 "output.wav"
 # check if convertion is right -> ffprobe output_filename.wav
 
 #understand the new code
