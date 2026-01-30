@@ -2,13 +2,20 @@
 # https://www.youtube.com/@TonsOfTONZ/videos
 
 #------------------------ convert files to wav ------------------------#
-# REQUIRED FORMAT: WAV, 8000Hz, Mono, 8-bit Unsigned PCM (pcm_u8)
-# This format is required for compatibility with the Arduino Serial streaming.
-# brew install ffmpeg
-# whole folder (m4a) -> for f in *.m4a; do ffmpeg -i "$f" -ar 8000 -ac 1 -c:a pcm_u8 "${f%.m4a}.wav"; done
-# one file (m4a) -> ffmpeg -i "input.m4a" -ar 8000 -ac 1 -c:a pcm_u8 "output.wav"
-# one file (wav) -> ffmpeg -i "input.wav" -ar 8000 -ac 1 -c:a pcm_u8 "output.wav"
-# check if convertion is right -> ffprobe output_filename.wav
+# AUDIO FORMAT GUIDELINES:
+# 1. format: WAV
+# 2. channels: Mono (REQUIRED for both modes)
+# 3. quality:
+#    - Sound Card Mode: 16-bit or 8-bit, 48000Hz or lower (flexible)
+#    - Arduino Serial Mode: 8-bit Unsigned (pcm_u8), 8000Hz (STRICT)
+
+# CONVERSION COMMANDS (ffmpeg):
+# Simple (Sound Card compatible):
+#   ffmpeg -i input.m4a -ac 1 output.wav
+# Strict (Arduino compatible - Recommended for safety):
+#   ffmpeg -i input.m4a -ar 8000 -ac 1 -c:a pcm_u8 output.wav
+
+# verify: ffprobe output.wav
 
 #understand the new code
 #recording don't stop after dialing a number
@@ -59,7 +66,7 @@ class SystemMode:
 AUDIO_DIR = "audio"
 DEFAULT_BAUDRATE = 1000000
 DIAL_TIMEOUT = 1.0  # seconds
-VOLUME_MULTIPLIER = 10.0  # Increase this to make sound louder
+VOLUME_MULTIPLIER = 100.0  # Increase this to make sound louder
 
 #------------------------ HARDWARE ABSTRACTION ------------------------#
 class TerminalAdapter:
