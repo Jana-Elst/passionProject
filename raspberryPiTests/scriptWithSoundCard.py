@@ -1025,8 +1025,8 @@ def find_devices() -> Dict[str, Any]:
                     # (In a real scenario we'd track 'ser' scope better)
                     pass
 
-    # Search for Audio Devices (USB Sound Cards)
     print("Searching for Audio Devices...")
+    print("TIP: If volume is low on Raspberry Pi, run 'alsamixer' in terminal and press F6 to select sound card.")
     p = pyaudio.PyAudio()
     audio_devices = []
     

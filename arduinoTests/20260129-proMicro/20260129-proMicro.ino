@@ -17,8 +17,8 @@ TX_BELL_STOP)
 const int R1_PIN = 10;
 const int R2_PIN = 8; // Bell 1
 const int R3_PIN = 9; // Bell 2
-const int measurePinT1 = A1;
-const int measurePinT2 = A2;
+const int measurePinT1 = A2;
+const int measurePinT2 = A1;
 
 #define T1 0
 #define T2 1
@@ -111,7 +111,7 @@ void loop() {
 
   // Serial.print(valueT1);
   // Serial.print(" | ");
-  // Serial.print(valueT2);
+  // Serial.println(valueT2);
 
   //--- 3. Get all information from the lines
   // On/off hook state & dialed digits
