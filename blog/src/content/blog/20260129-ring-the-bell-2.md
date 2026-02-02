@@ -1,8 +1,8 @@
 ---
-title: '#20 Ringing the bell 2.0'
+title: '#24 Ringing the bell 2.0'
 description: |
     Today i burned my transformator...
-pubDate: 'Jan 20 2026'
+pubDate: 'Jan 29 2026'
 heroImage: ../../assets/notes/20260120-circuit8-1.png
 sources:
 
