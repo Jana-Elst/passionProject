@@ -12,5 +12,4 @@ components:
 
 links: 
 ---
-Startte met grote script van pyton
-...???
+xxx

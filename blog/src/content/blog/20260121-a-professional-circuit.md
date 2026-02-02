@@ -1,8 +1,8 @@
 ---
-title: '#20 Recap'
+title: '#16 A professional circuit'
 description: |
     Switching relays isn't that easy.
-pubDate: 'Jan 20 2026'
+pubDate: 'Jan 21 2026'
 heroImage: ../../assets/notes/20260120-circuit8-1.png
 sources:
 
@@ -26,14 +26,20 @@ With two single-pole relays, you run the risk that one will open or close faster
 
 ## The circuit
 ### Step 1: Switching between intercom and sound infuse system
+This was the hardest part of the circuit... By using a relays between the two phones, it is now possible to switch between the intercom and the sound infuse system. The two points that comes out of the circuit can now be used as measure points, or the record and infuse sound.
 
 ### Step 2: Add measurement on/off hook
+Next up, measure if the phone is on or off hook, and which number the user has dialed. This measurement is done by the Pro Micro (5V). All those things could be measured by measuring the incoming voltage of the phone. But! The circuit of the phone is running on 9V DC, so, we need to power this voltage down to 5V DC, to protect the Pro Micro, by using a voltage divider. And now, or output voltage is 4.5 V DC.
+
+Putting the phone back on hook, taking the phone off hook, or dialing a number, can cause a inductive spike. You don't want that this spike reach your Arduino, or it could potentially damage it. To prevent this, I added an extra resistor, that 'eats' the most of the spike and a zenderdiode. I also added a little capacitor to filter out the noise. And voila, you can measure if the phone is on or off hook, and which number the user has dialed.
 
 ### Step 3: Add sound infuse system
+I don't only want to check the status of the phones, I also want to play a sound through one of the phones. To do this, I added for each phone a Arduino Nano IoT (3.3V). I'm using this Arduino as a DAC, it even has a special pin to do this job.
 
 ### Step 4: Add switching between AC & DC
+To switch between AC and DC, I added a double pole relay.
 
-### Step 5: Connect to the transformer and the [component]
+### Step 5: Connect to the transformer and the circuit
 !!! Don't use this scheme, it will break your transformer (or potentially broke mine by using this scheme) [(read everything about it here)](https://www.youtube.com/watch?v=)!!!
 
 My thinking was that I had a transformer that stepped down the power from 230V AC to 12V AC, allowing me to tap the right current and power for each part of my circuit. But what looks beautiful on paper isn't always beautiful in real life... So, read [here] what happened when I connected this part of my circuit.
