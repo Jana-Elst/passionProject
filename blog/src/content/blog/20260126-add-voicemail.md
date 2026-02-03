@@ -4,7 +4,7 @@ description: |
     In each ear an other phone.
     The easiest way to debug fast, without picking up the phones, the whole time
 pubDate: 'Jan 26 2026'
-heroImage: ../../assets/notes/20260120-circuit8-1.png
+heroImage: ../../assets/pictures/20260126-header.jpeg
 sources:
 
 gemini: 

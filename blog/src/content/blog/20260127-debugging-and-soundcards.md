@@ -3,7 +3,7 @@ title: '#22 Soundcards'
 description: |
     A lot of different circuits, but how can I connect them all?
 pubDate: 'Jan 27 2026'
-heroImage: ../../assets/notes/20260120-circuit8-1.png
+heroImage: ../../assets/pictures/20260127-header.png
 sources:
 
 gemini: 

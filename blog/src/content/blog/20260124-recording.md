@@ -4,7 +4,7 @@ description: |
     I hear something...
     It's noise!
 pubDate: 'Jan 24 2026'
-heroImage: ../../assets/notes/20260120-circuit8-1.png
+heroImage: ../../assets/20260124-header.jpg
 sources:
 
 gemini: 

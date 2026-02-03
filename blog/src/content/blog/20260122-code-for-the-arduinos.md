@@ -3,7 +3,7 @@ title: '#17 coding the arduino(s)'
 description: |
     ???
 pubDate: 'Jan 22 2026'
-heroImage: ../../assets/notes/20260120-circuit8-1.png
+heroImage: ../../assets/pictures/20260122-header.png
 sources:
 
 gemini: 

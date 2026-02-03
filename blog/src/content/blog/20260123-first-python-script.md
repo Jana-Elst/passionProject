@@ -2,7 +2,7 @@
 title: '#18 First Python script'
 description: |
 pubDate: 'Jan 23 2026'
-heroImage: ../../assets/notes/20260120-circuit8-1.png
+heroImage: ../../assets/pictures/20260123-header.png
 sources:
 
 gemini: 
