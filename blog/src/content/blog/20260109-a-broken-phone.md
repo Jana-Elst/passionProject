@@ -5,7 +5,7 @@ description: |
   The on/off hook switch of the RTT56B isn't working
   (or did it never work correctly?)
 pubDate: 'Jan 9 2026'
-heroImage: '../../assets/pictures/20260109-oxidated-wire.png'
+heroImage: '../../assets/pictures/20260109-oxidated-wire.webp'
 sources:
 
 gemini: 

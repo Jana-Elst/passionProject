@@ -3,7 +3,7 @@ title: '#16 A professional circuit'
 description: |
     Switching relays isn't that easy.
 pubDate: 'Jan 21 2026'
-heroImage: ../../assets/pictures/20260121-header.png
+heroImage: ../../assets/pictures/20260121-header.webp
 sources:
 
 gemini: 

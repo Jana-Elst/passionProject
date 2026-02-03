@@ -4,7 +4,7 @@ description: |
     A got a present!
     My soundcards arrived!
 pubDate: 'Jan 27 2026'
-heroImage: ../../assets/pictures/20260127-header.png
+heroImage: ../../assets/pictures/20260127-header.webp
 ---
 
 Yesterday, the logic was mostly finished, but as every developer knows, the last 10% of the work takes 90% of the time. I spent the morning squashing the final bugs in the logic loop. But the real highlight of the day? 

@@ -3,7 +3,7 @@ title: '#27 Making the housing'
 description: |
     I can call through my house!
 pubDate: 'Feb 02 2026'
-heroImage: ../../assets/pictures/20260201-header.png
+heroImage: ../../assets/pictures/20260201-header.webp
 ---
 
 With the circuit fully soldered and (thankfully) no longer on fire, it was time to give the project a proper home.
