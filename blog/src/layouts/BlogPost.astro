@@ -142,14 +142,36 @@ const prevPost = posts[currentPostIndex + 1];
 				margin-bottom: var(--space-s);
 			}
 
-			:global ol {
+			.content :global(ol) {
 				list-style: decimal;
-				margin-left: 1.5rem;
+				margin-left: 3rem;
+				padding-top: var(--space-3xs);
+				padding-bottom: var(--space-m);
 			}
 
-			:global ul {
+			.content :global(ol ul),
+			.content :global(ol + ul) {
+				margin-top: calc(var(--space-3xs) * -1);
+				margin-bottom: var(--space-3xs);
+			}
+
+			.content :global(ol + ul) {
+				margin-left: var(--space-xl);
+				margin-top: calc(var(--space-m) * -1);
+			}
+
+			.content :global(ul) {
 				list-style: square;
-				margin-left: 1.5rem;
+				margin-left: 3rem;
+			}
+
+			.content :global(li) {
+				padding-top: var(--space-3xs);
+			}
+
+			.content :global(ol ul) {
+				margin-top: var(--space-3xs);
+				margin-bottom: var(--space-3xs);
 			}
 
 			:global(.image-grid img) {
