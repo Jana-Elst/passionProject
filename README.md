@@ -72,19 +72,19 @@ This installation aims to break the "smartphone bubble" by using obsolete techno
 
 ### Week 4 (26 - 1 feb)
 **Scenografie + test the installation**
-- wirte the whole python logic (Monday)
-- debug the python logic (Tuesday)
-  - test if its working on the Pi
+- ~~wirte the whole python logic (Monday)~~
+- ~~debug the python logic (Tuesday)~~
+  - ~~test if its working on the Pi~~
   - create detailed scripts
-  - send instructions to the arduino to open & close the relais at the right moments
-- add relais for the bell to the circuit
-    - write extra arduino code
-- change sound system to the usbcards (instead of the arduino) (Wednesday)
+  - ~~send instructions to the arduino to open & close the relais at the right moments~~
+- ~~add relais for the bell to the circuit~~
+    - ~~write extra arduino code~~
+-~~change sound system to the usbcards (instead of the arduino) (Wednesday)~~
 
 - Make a nice scenografie
 - Test the installation
 
-- Solder everything together
+- ~~Solder everything together~~
 
 - add extra's
   - setup system
