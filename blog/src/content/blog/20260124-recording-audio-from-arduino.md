@@ -1,119 +1,183 @@
 ---
-title: '#15 Recording Audio from Arduino'
-description: |
-    Capturing voice messages from vintage phones
-pubDate: 'Jan 24 2026'
-heroImage: ../../assets/pictures/20260124-header.png
-sources:
 
-gemini: 
+## Code Evolution Throughout the Day
 
-components: 
+### 1. **Initial Recording Script Setup** 
+**Commit: `400b94c` (19:15:20) - "add new recording script"**
 
-links: 
+This was the foundation - I completely rewrote the recording script to output proper WAV files instead of just calculating sample rates.
+
+**Before:** The script only calculated the incoming data rate
+```python
+# Old calibration-only code
+print("Calculating true Sample Rate... Speak now!")
+start_time = time.time()
+total_bytes = 0
+
+while time.time() - start_time < 10:
+    if ser.in_waiting > 0:
+        data = ser.read(ser.in_waiting)
+        total_bytes += len(data)
+
+true_rate = total_bytes / 10
+print(f"Your True Sample Rate is: {true_rate} Hz")
+```
+
+**After:** Full recording functionality with WAV output
+```python
+# --- CONFIGURATION ---
+SERIAL_PORT = '/dev/ttyACM0'
+BAUD_RATE = 115200
+SAMPLE_RATE = 1039.6  # Based on calibration results
+OUTPUT_FILE = "final_phone_record.wav"
+
+def record_audio():
+    try:
+        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=None)
+        ser.reset_input_buffer()
+        time.sleep(1) # Let the line settle
+
+        with wave.open(OUTPUT_FILE, 'wb') as wav_file:
+            wav_file.setnchannels(1)   # Mono
+            wav_file.setsampwidth(1)    # 8-bit
+            wav_file.setframerate(int(SAMPLE_RATE))
+
+            print(f"Recording at {SAMPLE_RATE}Hz... Press Ctrl+C to stop.")
+            
+            while True:
+                if ser.in_waiting > 0:
+                    chunk = ser.read(ser.in_waiting)
+                    wav_file.writeframes(chunk)
+
+    except KeyboardInterrupt:
+        print("\nSaving file and exiting...")
+```
+
+**Why this matters:** This transformed the script from a diagnostic tool into a functional audio recorder that saves proper WAV files.
+
 ---
 
-## The Challenge: Recording Real Conversations
+### 2. **Sample Rate Experimentation**
 
-After successfully sending audio from my Raspberry Pi to the Arduino (and thus to the phone speakers), I needed to solve the reverse problem: how do I record what someone says into the phone? This is crucial for my installation, as I want users to be able to leave voice messages for each other.
+I tested multiple sample rates to find the sweet spot between quality and reliability:
 
-## Understanding the Recording Pipeline
-
-When someone speaks into a vintage rotary phone, the sound needs to travel through several stages:
-1. **The phone's microphone** converts sound waves into electrical signals
-2. **The Arduino** reads these analog signals and converts them to digital data
-3. **Serial communication** transfers the data from Arduino to Raspberry Pi
-4. **The Raspberry Pi** receives, buffers, and saves this data as an audio file
-
-The key challenge? Audio data is *continuous* and *time-sensitive*. Unlike switching LEDs or reading button states, there's no room for delays or missing chunks of data.
-
-## The Recording Script
-
-I created a Python script (`20260124-recordAudio.py`) that handles this data pipeline:
-
-### Key Features
-
-**1. High-Speed Serial Communication**
+**Commit: `d0a2118` (19:35:10) - "changed sample rate"**
 ```python
-BAUD_RATE = 1000000  # 1 Mbps for fast data transfer
+-SAMPLE_RATE = 8000 # Matches the 125us interval in Arduino
++SAMPLE_RATE = 16000 # Matches the 125us interval in Arduino
 ```
-I'm using a very high baud rate (1 million bits per second) to keep up with the audio data stream. At 8kHz sample rate, we're transferring 8,000 bytes per second, and any bottleneck could cause audio glitches.
+**Why:** Doubled the sample rate from 8kHz to 16kHz to test if higher quality helped. Spoiler: it didn't - the Arduino couldn't keep up.
 
-**2. Chunked Reading**
+**Commit: `6e1b594` (19:36:54) - "changed sample rate to something very lowwww"**
+```python
+-SAMPLE_RATE = 16000 # Matches the 125us interval in Arduino
++SAMPLE_RATE = 1000 # Matches the 125us interval in Arduino
+```
+**Why:** Went to the opposite extreme - 1kHz - to see if a dramatically lower rate would at least give clean (if low-quality) audio. This helped identify that my actual rate was somewhere in between.
+
+---
+
+### 3. **Chunked Reading Implementation**
+**Commit: `ec8c5c0` (19:56:57) - "changed the recording to handle chunks"**
+
+This was a critical performance improvement. Instead of reading byte-by-byte, I implemented chunk-based reading:
+
+**Before:** Read whatever was available immediately
+```python
+while len(frames) < total_samples_needed:
+    if ser.in_waiting > 0:
+        # Read everything at once, no buffering strategy
+        data = ser.read(ser.in_waiting)
+        frames.append(data)
+```
+
+**After:** Smart chunk-based reading
 ```python
 CHUNK_SIZE = 64
-```
-Rather than reading byte-by-byte (which would be slow), I read the serial buffer in chunks of 64 bytes. This is more efficient and reduces the overhead of multiple read operations.
 
-**3. Smart Buffer Management**
+while len(all_data) < total_bytes:
+    # Check if at least one full chunk is waiting
+    if ser.in_waiting >= CHUNK_SIZE:
+        # Read in multiples of CHUNK_SIZE
+        bytes_to_read = (ser.in_waiting // CHUNK_SIZE) * CHUNK_SIZE
+        chunk = ser.read(bytes_to_read)
+        all_data.extend(chunk)
+        
+        # Progress bar
+        progress = (len(all_data) / total_bytes) * 100
+        print(f"Progress: {progress:.1f}%", end="\r")
+```
+
+**Key improvements:**
+- **Defined chunk size:** 64 bytes - balances efficiency with responsiveness
+- **Wait for full chunks:** Only read when `CHUNK_SIZE` bytes are available
+- **Read in multiples:** Calculate how many complete chunks are waiting
+- **Better progress tracking:** Show percentage completion during recording
+
+**Why this matters:** 
+- Reduces overhead from excessive small reads
+- Prevents buffer fragmentation
+- More predictable timing = less audio glitches
+- Better progress feedback for longer recordings
+
+---
+
+### 4. **Configuration Changes**
+
+Throughout the day, I also adjusted these parameters:
+
+**Baud Rate Evolution:**
 ```python
-if ser.in_waiting >= CHUNK_SIZE:
-    bytes_to_read = (ser.in_waiting // CHUNK_SIZE) * CHUNK_SIZE
-    chunk = ser.read(bytes_to_read)
+BAUD_RATE = 115200  # Initial attempt
+BAUD_RATE = 250000  # Increased for better reliability
+BAUD_RATE = 1000000 # Final: 1 Mbps for maximum throughput
 ```
-The script checks how much data is waiting in the serial buffer and reads it in multiples of the chunk size. This prevents reading partial chunks while maximizing throughput.
 
-**4. Progress Tracking**
-```python
-progress = (len(all_data) / total_bytes) * 100
-print(f"Progress: {progress:.1f}%", end="\r")
-```
-A simple progress indicator shows how much of the recording is complete. This is especially helpful for longer recordings.
+**Why:** Higher baud rates reduce the chance of serial buffer overruns. At 8kHz sample rate, we need at least 8,000 bytes/second, but going to 1Mbps gives us a huge safety margin.
 
-**5. WAV File Output**
-```python
-with wave.open(OUTPUT_FILE, 'wb') as wf:
-    wf.setnchannels(1)      # Mono audio
-    wf.setsampwidth(1)       # 8-bit audio (matches phone quality)
-    wf.setframerate(SAMPLE_RATE)  # 8kHz sample rate
-    wf.writeframes(all_data)
-```
-The script saves the audio in WAV format, which is uncompressed and perfect for testing. The settings match typical telephone audio quality:
-- **Mono**: Old phones are mono, not stereo
-- **8-bit**: Sufficient for voice, keeps file sizes manageable
-- **8kHz**: Standard for telephony, captures the full range of human speech
+---
 
-## Test Recordings
+## Hardware Circuit Changes
 
-After implementing the script, I created several test recordings to verify the quality:
-- `test_record.wav` - Basic functionality test
-- `phone_live_recording.wav` & `phone_live_recording1.wav` - Real-time recording attempts
-- `phone_synced.wav` - Testing synchronization between Arduino and Pi
-- `phone_fixed.wav` - After fixing timing issues
-- `final_phone_record.wav` - The successful implementation!
+The commit messages also document my hardware troubleshooting:
 
-Each of these recordings helped me identify and fix issues like:
-- Buffer overruns (Arduino sending faster than Pi could receive)
-- Synchronization problems (timing mismatches causing audio artifacts)
-- Quality issues (noise, distortion, or clipping)
+**Commit: `2a5eb72` (20:55:54)**
+> "prev sound: low scrhhhhh, now connected pin A1 to gnd"
 
-## Technical Specifications
+**Problem:** Getting low screeching noise  
+**Solution:** Grounded the analog input pin (A1) when not in use to prevent floating voltage readings
 
-| Parameter | Value | Reason |
-|-----------|-------|--------|
-| Sample Rate | 8,000 Hz | Standard for telephony, adequate for voice |
-| Bit Depth | 8-bit | Matches phone audio quality, smaller files |
-| Channels | 1 (Mono) | Vintage phones are mono |
-| Baud Rate | 1,000,000 | High speed to prevent data loss |
-| Chunk Size | 64 bytes | Balances efficiency and responsiveness |
-| Recording Length | 10 seconds | Testing duration (configurable) |
+**Commit: `36d9b5c` (21:01:34)**
+> "prev sound: dirty noise - connected phone again, without transistor"
 
-## What This Enables
+**Problem:** Dirty noise in recordings  
+**Solution:** Temporarily removed the transistor to isolate whether it was causing signal distortion
 
-With reliable audio recording in place, I can now:
-1. **Record voice messages** from users who dial in
-2. **Store these messages** as WAV files on the Raspberry Pi
-3. **Play them back** to other users who call that number
-4. **Create a voicemail system** for the installation
+**Commits: `fa019ff` & `a288578` (21:06-21:07)**
+> "prev sound: dirty noise ) added transistor"
 
-This was a critical milestone in Week 3 of my project timeline, fulfilling the requirement to "write code to record a voice mail" and establishing the foundation for the full interactive experience.
+**Result:** Re-added transistor with proper configuration - this fixed the dirty noise issue!
 
-## Next Steps
+**Commit: `aeb53a4` (21:23:00)**
+> "test met volledige schakeling" (test with complete circuit)
 
-Now that I can both send and receive audio through the Arduino/Raspberry Pi system, the next challenges are:
-- Integrating recording with the phone's on/off-hook detection
-- Managing multiple recordings (associating them with dialed numbers)
-- Implementing playback logic when someone calls a number with a voicemail
-- Testing the complete workflow: dial → record → dial again → playback
+**Milestone:** First test with the full circuit including transistor working cleanly
 
-The technical foundation is solid. Now it's time to build the user experience on top of it!
+**Commit: `37147f9` (22:00:11)**
+> "test met nieuwe schakeling" (test with new circuit)
+
+**Final iteration:** Refined circuit layout for the final working configuration
+
+---
+
+## The Debugging Process
+
+This day perfectly captures the reality of hardware debugging:
+
+1. **Write code** → test fails
+2. **Adjust sample rate** → still noisy
+3. **Change circuit** → getting better
+4. **Tweak code** → almost there
+5. **Fix grounding** → SUCCESS!
+
+Each commit represents an incremental step toward the working solution. The rapid succession of "test" commits shows the iterative nature of hardware-software integration - sometimes you just need to try it and see what happens.
