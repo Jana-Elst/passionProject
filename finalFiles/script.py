@@ -1,6 +1,23 @@
 #------------------------ dialing tones, ring tones, etc. from all over the world ------------------------#
 # https://www.youtube.com/@TonsOfTONZ/videos
 
+### STEP 1
+#add voices between the question if both phones are already off hook
+#add waiting on connecting to the other phone
+
+#voicemail interuption no sound for T2
+#add reminder for dailing. by interuption
+
+#add intro between question and voicemail
+
+#add extra/new cases
+#add dailing and waiting tones
+
+### STEP 2
+# add setup
+# add reset
+# add reverse game
+
 #------------------------ convert files to wav ------------------------#
 # AUDIO FORMAT GUIDELINES:
 # 1. format: WAV
@@ -692,8 +709,7 @@ class PhoneSystem:
         self.run_sub_case_conversation_intro()
 
     def run_sub_case_conversation_intro(self):
-        print(f"-> CONVERSATION INTRO")
-        files = ["SenderIntro.wav"]
+        files = ["sender-1.wav"]
         self.sender.play_async(files)
 
         # Reset Buffer & Handler
@@ -707,7 +723,7 @@ class PhoneSystem:
         # Check for Early Receiver
         if self.receiver.state == PhoneState.OFFHOOK:
             print("Receiver is already OFFHOOK. Playing Wait Message.")
-            self.receiver.play_async(["ReceiverOffhookBeforeRing.wav", "WAITING_TONE"])
+            self.receiver.play_async(["receiver-0.0.wav", "WAITING_TONE"])
 
     def start_dial_reminder(self, extra_delay: float = 0.0):
         # Starts a recursive 10s timer
@@ -715,9 +731,8 @@ class PhoneSystem:
         self.start_timer("dial_reminder", timeout, self.on_dial_reminder_timeout)
 
     def on_dial_reminder_timeout(self):
-        print("Dial Reminder Timeout! Playing Reminder...")
         if self.mode == SystemMode.CALL_SETUP and self.sender:
-            audio_files = ["ReminderToDial.wav"]
+            audio_files = ["sender-1.1.wav"]
             self.sender.play_async(audio_files)
             duration = self.sender.get_duration(audio_files)
             self.start_dial_reminder(extra_delay=duration)
@@ -742,28 +757,41 @@ class PhoneSystem:
                 
                 if self.receiver.state == PhoneState.OFFHOOK:
                     print("Receiver Waiting -> Connect Immediately")
-                    self.run_sub_case_conversation_starter()
+                    self.run_sub_case_conversation_connect()
                 else:
                     self.run_sub_case_conversation_ring()
              
             else:
                 # Invalid Start
                 print("Wrong Number (Must start with 0)")
-                self.sender.play_async(["WrongNumber.wav"])
+                self.sender.play_async(["sender-1.2.wav"])
                 self.dial_buffer[self.sender.number] = ""
                 # Reminder timer continues
 
         elif event_type == "is_offHook" and phone == self.receiver:
              print("Receiver picked up EARLY.")
-             phone.play_async(["ReceiverOffhookBeforeRing.wav"])
-
-        elif event_type == "offhook" and phone == self.receiver:
-             # Should not happen as 'is_offHook' is primary event, but keeping safety
-             self.run_sub_case_conversation_starter()
+             phone.play_async(["receiver-0.0.wav"])
+    
+    def run_sub_case_conversation_connect(self):
+        print(f"--- CONVERSATION CONNECT ---")
+        snd_files = ["sender-2.4.wav"]
+        rec_files = ["receiver-0.1.wav"]
+        self.sender.play_async(snd_files)
+        self.receiver.play_async(rec_files)
+        
+        # Determine wait time
+        dur_snd = self.sender.get_duration(snd_files)
+        dur_rec = self.receiver.get_duration(rec_files)
+        wait_time = max(dur_snd, dur_rec)
+        
+        self.start_timer("connect_to_starter", wait_time + 0.5, self.run_sub_case_conversation_starter)
 
     def run_sub_case_conversation_ring(self):
         print(f"--- CONVERSATION RING ---")
-        self.sender.play_async(["SenderDialedNumber.wav"])
+        dialed_suffix = self.question
+        topic = f"topic-{dialed_suffix}.wav"
+
+        self.sender.play_async(["sender-2.1.wav", topic, "sender-2.2.wav", "sender-2.3.wav"])
 
         #START RINGING
         print(f"Sending {self.receiver.name}_BELL_START to Arduino...")
@@ -781,8 +809,23 @@ class PhoneSystem:
             print(f"Sending {self.receiver.name}_BELL_STOP to Arduino...")
             if self.main_serial:
                 self.main_serial.write(f"{self.receiver.name}_BELL_STOP\n".encode('utf-8'))
+            
+            # Calculate durations for sync
+            rec_file = "receiver-1.wav"
+            snd_file = "sender-3.0.wav"
+            
+            dur_rec = self.receiver.get_duration([rec_file])
+            dur_snd = self.sender.get_duration([snd_file])
+            
+            # Sender pause should cover the difference to match receiver, minimum 2.0s
+            pause_val = max(2.0, dur_rec - dur_snd)
+            
+            self.receiver.play_async([rec_file])
+            self.sender.play_async([snd_file, ("PAUSE", pause_val)])
 
-            self.run_sub_case_conversation_starter()
+            # Wait for this intro part to finish before starting the conversation starter
+            max_wait = max(dur_rec, dur_snd + pause_val)
+            self.start_timer("conversation_starter", max_wait + 0.5, self.run_sub_case_conversation_starter)
 
     def run_sub_case_conversation_starter(self):
         print(f"--- CONVERSATION STARTER ---")
@@ -792,11 +835,11 @@ class PhoneSystem:
         question = f"question-{dialed_suffix}.wav"
 
         # Define Audio Parts
-        sender_part1 = ["SenderCall1.wav", topic, "SenderCall2.wav"]
-        sender_part2 = ["SenderCall3.wav"]
+        sender_part1 = ["sender-3.1.wav", topic, "sender-3.2.wav", question]
+        sender_part2 = ["sender-3.3.wav"]
         
-        receiver_part1 = ["ReceiverCall1.wav"]
-        receiver_part2 = ["ReceiverCall2.wav", topic, "ReceiverCall3.wav"]
+        receiver_part1 = ["receiver-2.1.wav", question]
+        receiver_part2 = ["receiver-2.2.wav"]
         
         # Sync Calculation
         duration_s1 = self.sender.get_duration(sender_part1)
@@ -834,10 +877,6 @@ class PhoneSystem:
         if self.main_serial:
             self.main_serial.write(b"R1_OPEN\n")
 
-        common = [question, "SenderReceiverCall4.wav"]
-        self.sender.play_async(common)
-        self.receiver.play_async(common)
-
     # 2. Voicemail Flow
     def run_sub_case_conversation_ring_timeout(self):
         print("--- CONVERSATION RING TIMEOUT (VOICEMAIL) ---")
@@ -853,11 +892,19 @@ class PhoneSystem:
         if len(dialed_suffix) < 2: dialed_suffix = "01"
         
         vm_playback_file = f"voicemail-{self.sender.name}-{dialed_suffix}.wav"
+        topic = f"topic-{dialed_suffix}.wav"
+        question = f"question-{dialed_suffix}.wav"
         
         files = [
-            "SenderVoiceMail1.wav",  # Intro
-            vm_playback_file,        # "voicemail-T1-01.wav"
-            "SenderVoiceMail4.wav"   # "Leave a message..."
+            "sender-V1.1.wav",  # Intro
+            topic,
+            "sender-V1.2.wav",
+            question,
+            "sender-V1.3.wav",
+            vm_playback_file,
+            "sender-V2.1.wav",
+            question,
+            "sender-V2.2.wav"
         ]
         
         print(f"Playing Voicemail Sequence on {self.sender.name}...")
@@ -900,7 +947,7 @@ class PhoneSystem:
 
     def run_sub_case_voicemail_end(self):
         print("--- VOICEMAIL END ---")
-        self.sender.play_async(["SenderVoiceMailEnd.wav"])
+        self.sender.play_async(["sender-V3.wav"])
         
         # Validate Recording
         final_filename = f"voicemail-{self.sender.name}-{self.question}.wav"
@@ -938,7 +985,7 @@ class PhoneSystem:
         self.dial_buffer[self.sender.number] = ""
         
         print("Sender: dial 1 to Connect, 2 to Refuse")
-        self.sender.play_async(["SenderVoicemailIncomingCall.wav"])
+        self.sender.play_async(["sender-V-interuption1.wav"])
         
         self.current_case_handler = self.run_sub_case_voicemail_interuption_choice
 
@@ -949,12 +996,12 @@ class PhoneSystem:
              
              if choice == "1":
                  print("Choice 1: Connect")
-                 self.sender.play_async(["SenderRecieverVoicemailCall.wav"])
+                 self.sender.play_async(["sender-V-interuption2.1.wav"])
                  self.run_sub_case_conversation_starter()
                  
              elif choice == "2":
                  print("Choice 2: Refuse")
-                 self.sender.play_async(["SenderVoicemailRefusedCall.wav"])
+                 self.sender.play_async(["sender-V-interuption2.2.wav"])
                  self.run_sub_case_voicemail_refuse()
                  
              elif len(choice) > 1:
@@ -963,10 +1010,10 @@ class PhoneSystem:
 
     def run_sub_case_voicemail_refuse(self):
         print("--- VOICEMAIL REFUSE ---")
-        self.receiver.play_async(["ReceiverVoicemailRefusedCall.wav"])
+        self.receiver.play_async(["receiver-V2.2.wav"])
         self.receiver.set_state(PhoneState.IDLE)
         
-        files = ["SenderVoicemailRefusedCall.wav"]
+        files = ["sender-V-interuption2.2.wav"]
         duration = self.sender.get_duration(files)
         
         self.start_timer("resume_vm", duration + 0.5, self.run_sub_case_voicemail_resume)
