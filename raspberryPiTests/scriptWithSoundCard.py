@@ -12,8 +12,10 @@
 # CONVERSION COMMANDS (ffmpeg):
 # Simple (Sound Card compatible):
 #   ffmpeg -i input.m4a -ac 1 output.wav
+#   for f in *.m4a; do ffmpeg -i "$f" -ac 1 "${f%.m4a}.wav"; done
 # Strict (Arduino compatible - Recommended for safety):
 #   ffmpeg -i input.m4a -ar 8000 -ac 1 -c:a pcm_u8 output.wav
+#   for f in *.m4a; do ffmpeg -i "$f" -ar 8000 -ac 1 -c:a pcm_u8 "${f%.m4a}.wav"; done
 
 # verify: ffprobe output.wav
 
