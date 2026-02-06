@@ -91,12 +91,12 @@ bool isConnected = false;
 void loop() {
   //--- 0. Handshake
   // If we haven't established a connection yet, wait for it.
-  // if (!isConnected) {
-  //   while (!handshake()) {
-  //     delay(100);
-  //   }
-  //   isConnected = true;
-  // }
+  if (!isConnected) {
+    while (!handshake()) {
+      delay(100);
+    }
+    isConnected = true;
+  }
 
   //--- 1. Check Serial Commands
   checkSerialCommands();
