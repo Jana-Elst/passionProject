@@ -912,9 +912,9 @@ class RingingState(State):
         self.context.sender.play_async(files)
 
         # Arduino Ringing
-        print(f"Sending {self.context.receiver.name}_BELL_START")
+        print(f"Sending {self.context.sender.name}_BELL_START")
         if self.context.main_serial:
-            self.context.main_serial.write(f"{self.context.receiver.name}_BELL_START\n".encode('utf-8'))
+            self.context.main_serial.write(f"{self.context.sender.name}_BELL_START\n".encode('utf-8'))
 
         # Voicemail Timer
         self.context.start_timer("voicemail_timeout", TIME_TILL_VOICEMAIL, self.trigger_voicemail)
