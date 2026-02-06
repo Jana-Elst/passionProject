@@ -1022,9 +1022,9 @@ class RingingState(State):
             
             files = [
                 AUDIO_CONFIG["ring_intro_prefix"], 
-                ("PAUSE", 0.5),
+                ("PAUSE", 1),
                 topic, 
-                ("PAUSE", 0.5),
+                ("PAUSE", 1),
                 AUDIO_CONFIG["ring_intro_suffix_1"], 
                 AUDIO_CONFIG["ring_intro_suffix_2"]
             ]
@@ -1116,13 +1116,13 @@ class ConnectedState(State):
         question = f"question-{dialed_suffix}.wav"
 
         # Sender Parts
-        s_part1 = [AUDIO_CONFIG["conv_start_sender_1"], ("PAUSE", 0.5),
+        s_part1 = [AUDIO_CONFIG["conv_start_sender_1"], ("PAUSE", 1),
                 topic, 
-                ("PAUSE", 0.5), AUDIO_CONFIG["conv_start_sender_2"], ("PAUSE", 0.5), question, ("PAUSE", 0.5)]
+                ("PAUSE", 1), AUDIO_CONFIG["conv_start_sender_2"], ("PAUSE", 1), question, ("PAUSE", 1)]
         s_part2 = [AUDIO_CONFIG["conv_start_sender_3"]]
         
         # Receiver Parts
-        r_part1 = [AUDIO_CONFIG["conv_start_receiver_1"], ("PAUSE", 0.5), question, ("PAUSE", 0.5)]
+        r_part1 = [AUDIO_CONFIG["conv_start_receiver_1"], ("PAUSE", 1), question, ("PAUSE", 1)]
         r_part2 = [AUDIO_CONFIG["conv_start_receiver_2"]]
         
         return (s_part1, s_part2), (r_part1, r_part2)
@@ -1213,8 +1213,8 @@ def construct_voicemail_playlist(context):
     question = f"question-{dialed_suffix}.wav"
     
     # [0-1] + topic + [2] + question + [3] + vm_file + [4] + question + [5-6]
-    files = [parts[0], parts[1], ("PAUSE", 0.5), topic, ("PAUSE", 0.5), parts[2], ("PAUSE", 0.5), question, ("PAUSE", 0.5), 
-             parts[3], vm_playback_file, parts[4], ("PAUSE", 0.5), question, ("PAUSE", 0.5),
+    files = [parts[0], parts[1], ("PAUSE", 1), topic, ("PAUSE", 1), parts[2], ("PAUSE", 1), question, ("PAUSE", 1), 
+             parts[3], vm_playback_file, parts[4], ("PAUSE", 1), question, ("PAUSE", 1),
              parts[5], parts[6]]
     return files
 
