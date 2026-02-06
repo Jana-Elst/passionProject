@@ -47,7 +47,7 @@
 #   - Open close bell circuit                                     (TX_BELL_START / TX_BELL_STOP)
 
 #------------------------ IMPORTS ------------------------#
-import os
+import random
 import sys
 import random
 import shutil
@@ -78,14 +78,20 @@ TIME_TILL_VOICEMAIL = 15.0
 
 #--- Tone Definitions (Type, Freq, Duration, [ModFreq, ModIdx]) ---
 TONE_DIAL            = ("TONE", 425, 10.0) 
-TONE_DIAL_SHORT      = ("TONE", 425, 1.0)
+TONE_DIAL_SHORT      = ("TONE", 425, 5.0)
 TONE_DTMF_FEEDBACK   = ("TONE", 600, 0.15) # Short blip when user dials a digit
-TONE_CLICK           = ("TONE", 1000, 0.05)
+TONE_CLICK           = ("TONE", 500, 0.30)
 TONE_BUSY            = ("TONE", 400, 0.375)
 SILENCE_BUSY         = ("PAUSE", 0.375)
 TONE_RINGBACK        = ("TONE", 400, 0.4, 17, 0.95)
 SILENCE_RINGBACK     = ("PAUSE", 2.0)
 SILENCE_RINGBACK_S   = ("PAUSE", 0.2)
+CONNECTING_TONE = [
+    ("TONE", 440, 0.2), # A4
+    ("TONE", 554, 0.2), # C#5
+    ("TONE", 659, 0.2), # E5
+    ("PAUSE", 0.5)
+]
 
 # Complex Sequences
 RINGBACK_SEQUENCE = [TONE_RINGBACK, SILENCE_RINGBACK_S, TONE_RINGBACK, SILENCE_RINGBACK]
@@ -96,7 +102,7 @@ DIAL_TONE_LOOP    = ("LOOP", [TONE_DIAL, ("PAUSE", 0.5)])
 AUDIO_CONFIG = {
     # Basic Tones
     "dial_tone": [TONE_DIAL],
-    "dial_tone_short": [TONE_DIAL_SHORT],
+    "dial_tone_short": [("PAUSE", 0.5), TONE_DIAL_SHORT],
     "dial_tone_loop": [DIAL_TONE_LOOP],
     "click_tone": [TONE_CLICK],
     "dial_feedback": [TONE_DTMF_FEEDBACK],
@@ -112,8 +118,8 @@ AUDIO_CONFIG = {
     "wrong_number": ["sender-1.2.wav"],
 
     # Ringing Phase
-    "ring_sender_preconnected":   ["sender-2.4.wav"],
-    "ring_receiver_preconnected": ["receiver-0.1.wav"],
+    "ring_sender_preconnected":   ["sender-2.4.wav", CONNECTING_TONE],
+    "ring_receiver_preconnected": ["receiver-0.1.wav", CONNECTING_TONE],
     
     # Sequence: Intro -> Topic -> Suffix 1 -> Suffix 2 -> Ringback Loop
     "ring_intro_prefix":   ["sender-2.1.wav"],
@@ -121,8 +127,8 @@ AUDIO_CONFIG = {
     "ring_intro_suffix_2": ["sender-2.3.wav"], 
     "ringback_sequence":   RINGBACK_SEQUENCE,
 
-    "ring_receiver_wait_file": [TONE_CLICK, "receiver-1.wav"],
-    "ring_sender_wait_file": [TONE_CLICK, "sender-3.0.wav"],
+    "ring_receiver_wait_file": [TONE_CLICK, "receiver-1.wav", CONNECTING_TONE],
+    "ring_sender_wait_file": [TONE_CLICK, "sender-3.0.wav", CONNECTING_TONE],
     # Conversation Parts
     "conv_start_sender_1": ["sender-3.1.wav"],
     "conv_start_sender_2": ["sender-3.2.wav"],
@@ -134,8 +140,8 @@ AUDIO_CONFIG = {
     "interruption_receiver_hangup": ["sender-5.wav", ("LOOP", RINGBACK_SEQUENCE)],
     "interruption_busy_tone": [("LOOP", [TONE_BUSY, SILENCE_BUSY])],
     #End of call
-    "end_call_sender": [TONE_DIAL, "receiver-5.wav"],
-    "end_call_receiver": [TONE_DIAL, "receiver-5.wav"],
+    "end_call_sender": [TONE_DIAL, ("PAUSE", 0.5), "receiver-5.wav"],
+    "end_call_receiver": [TONE_DIAL, ("PAUSE", 0.5), "receiver-5.wav"],
     
     # Ringback Pattern (repeated in logic)
     "ringback_sequence": RINGBACK_SEQUENCE, 
@@ -146,8 +152,8 @@ AUDIO_CONFIG = {
         "sender-V2.1.wav", "sender-V2.2.wav", TONE_CLICK
     ],
     "vm_prompt_end": ["sender-V3.wav"],
-    "vm_interruption_menu": [("LOOP", ["sender-V-interuption1.wav", TONE_DIAL])],
-    "vm_interruption_wait": ["receiver-V1.1.wav", BUSY_LOOP],
+    "vm_interruption_menu": [TONE_CLICK, ("LOOP", ["sender-V-interuption1.wav", TONE_DIAL])],
+    "vm_interruption_wait": [("PAUSE", 0.5),"receiver-V1.1.wav", BUSY_LOOP],
     "vm_interruption_wait_during_recording": ["receiver-V1.2.wav", BUSY_LOOP],
     "vm_choice_1_sender": ["sender-V-interuption2.1.wav"],
     "vm_choice_1_receiver": ["receiver-V2.1.wav"],
@@ -788,6 +794,20 @@ class IdleState(State):
              self.context.t1.play_async(AUDIO_CONFIG["dial_tone_loop"])
         if self.context.t2.state == PhoneState.OFFHOOK:
              self.context.t2.play_async(AUDIO_CONFIG["dial_tone_loop"])
+             
+        # Start Random Ghost Ringing Timer
+        # 8 to 15 minutes = 480 to 900 seconds
+        delay = random.uniform(480, 900)
+        print(f"Ghost Ring scheduled in {delay:.1f}s")
+        self.context.start_timer("ghost_ring_start", delay, self.trigger_ghost_ring)
+
+    def on_exit(self):
+        self.context.stop_timer("ghost_ring_start")
+
+    def trigger_ghost_ring(self):
+        # Randomly select a phone to ring
+        target_phone = random.choice([self.context.t1, self.context.t2])
+        self.context.transition_to(GhostRingingState(self.context, target_phone))
 
     def on_offhook(self, phone):
         self.context.sender = phone
@@ -798,8 +818,40 @@ class IdleState(State):
     
     def on_onhook(self, phone):
         if phone == self.context.receiver:
-            self.context.receiver.stop_audio()
+             self.context.receiver.stop_audio()
         return None
+
+class GhostRingingState(State):
+    def __init__(self, context, target_phone):
+        super().__init__(context)
+        self.target_phone = target_phone
+
+    def on_enter(self):
+        print(f"--- GHOST RINGING ({self.target_phone.name}) ---")
+        
+        # Ring the Physical Bell
+        if self.context.main_serial:
+            self.context.main_serial.write(f"{self.target_phone.name}_BELL_START\n".encode('utf-8'))
+            
+        # Schedule Stop Ringing (30-60s)
+        duration = random.uniform(30.0, 60.0)
+        print(f"Ringing for {duration:.1f}s")
+        self.context.start_timer("ghost_ring_end", duration, self.stop_ringing)
+
+    def stop_ringing(self):
+        print("Ghost Ring Timeout")
+        self.context.transition_to(IdleState(self.context))
+
+    def on_exit(self):
+        self.context.stop_timer("ghost_ring_end")
+        if self.context.main_serial:
+            self.context.main_serial.write(f"{self.target_phone.name}_BELL_STOP\n".encode('utf-8'))
+
+    def on_offhook(self, phone):
+        # If ANY phone is picked up, we stop ringing and go to Idle (which gives dial tone)
+        print(f"Ghost Ring Interrupted by {phone.name}")
+        return IdleState(self.context)
+
 
 #--- CONVERSATION STATES ------------------------#
 class DialingState(State):
