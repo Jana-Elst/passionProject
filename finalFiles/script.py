@@ -1235,6 +1235,10 @@ class PostCallWaitState(State):
         return None
 
     def on_onhook(self, phone):
+        # Only go to Idle if the phone keeping the session alive hangs up
+        if self.phone_still_offhook and phone != self.phone_still_offhook:
+             return None
+             
         self.context.t1.stop_audio()
         self.context.t2.stop_audio()
         return IdleState(self.context)
