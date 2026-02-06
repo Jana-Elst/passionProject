@@ -92,7 +92,7 @@ CONNECTING_TONE = [
     ("TONE", 880, 0.08), # Jump an octave for a "ping" effect
     ("TONE", 554, 0.08),
     ("TONE", 1108, 0.08),
-    ("PAUSE", 0.1)@
+    ("PAUSE", 0.1)
 ]
 
 # Complex Sequences
