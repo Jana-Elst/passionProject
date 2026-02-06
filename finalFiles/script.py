@@ -88,10 +88,11 @@ TONE_RINGBACK        = ("TONE", 400, 0.4, 17, 0.95)
 SILENCE_RINGBACK     = ("PAUSE", 2.0)
 SILENCE_RINGBACK_S   = ("PAUSE", 0.2)
 CONNECTING_TONE = [
-    ("TONE", 440, 0.2), # A4
-    ("TONE", 554, 0.2), # C#5
-    ("TONE", 659, 0.2), # E5
-    ("PAUSE", 0.5)
+("TONE", 440, 0.08), 
+    ("TONE", 880, 0.08), # Jump an octave for a "ping" effect
+    ("TONE", 554, 0.08),
+    ("TONE", 1108, 0.08),
+    ("PAUSE", 0.1)@
 ]
 
 # Complex Sequences
@@ -111,7 +112,7 @@ AUDIO_CONFIG = {
     "busy_loop": [BUSY_LOOP],
     
     # Dialing Phase
-    "intro_sender": [TONE_DIAL_SHORT, ("PAUSE", 0.5), "sender-1.wav"],
+    "intro_sender": [TONE_DIAL_SHORT, CONNECTING_TONE, ("PAUSE", 0.5), "sender-1.wav"],
     "intro_wait":   [TONE_DIAL_SHORT, ("PAUSE", 0.5), "receiver-0.0.wav", BUSY_LOOP],
     # A loop that plays the dial tone, then a voice reminder, then repeats
     "dial_reminder": [("LOOP", [TONE_DIAL, ("PAUSE", 1.0), "sender-1.1.wav", ("PAUSE", 1.0)])],
@@ -119,8 +120,8 @@ AUDIO_CONFIG = {
     "wrong_number": ["sender-1.2.wav"],
 
     # Ringing Phase
-    "ring_sender_preconnected":   ["sender-2.4.wav", CONNECTING_TONE],
-    "ring_receiver_preconnected": ["receiver-0.1.wav", CONNECTING_TONE],
+    "ring_sender_preconnected":   ["sender-2.4.wav"],
+    "ring_receiver_preconnected": ["receiver-0.1.wav"],
     
     # Sequence: Intro -> Topic -> Suffix 1 -> Suffix 2 -> Ringback Loop
     "ring_intro_prefix":   ["sender-2.1.wav"],
@@ -128,8 +129,8 @@ AUDIO_CONFIG = {
     "ring_intro_suffix_2": ["sender-2.3.wav"], 
     "ringback_sequence":   RINGBACK_SEQUENCE,
 
-    "ring_receiver_wait_file": [TONE_CLICK, "receiver-1.wav", CONNECTING_TONE],
-    "ring_sender_wait_file": [TONE_CLICK, "sender-3.0.wav", CONNECTING_TONE],
+    "ring_receiver_wait_file": [TONE_CLICK, "receiver-1.wav"],
+    "ring_sender_wait_file": [TONE_CLICK, "sender-3.0.wav"],
     # Conversation Parts
     "conv_start_sender_1": ["sender-3.1.wav"],
     "conv_start_sender_2": ["sender-3.2.wav"],
