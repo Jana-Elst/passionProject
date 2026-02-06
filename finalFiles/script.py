@@ -76,7 +76,7 @@ CHUNK_SIZE = 2048
 
 # Timers
 TIME_TILL_VOICEMAIL = 15.0
-PAUSE_AROUND_QUESTION_OR_TOPIC = 0.5
+PAUSE_AROUND_QUESTION_OR_TOPIC = 0.3
 
 #--- Tone Definitions (Type, Freq, Duration, [ModFreq, ModIdx]) ---
 TONE_DIAL            = ("TONE", 425, 10.0) 
@@ -1188,34 +1188,35 @@ class ConversationState(State):
         self.context.receiver.stop_audio()
 
     def on_onhook(self, phone):
-        other = self.context.get_other_phone(phone)
-
-        self.context.sender, self.context.receiver = other, phone
         return PostCallWaitState(self.context)
 
 class PostCallWaitState(State):
     def on_enter(self):
         print("--- POST CALL WAIT STATE ---")
-        self.context.sender.play_async([AUDIO_CONFIG["busy_loop"]])
+        
+        # Play busy loop on whichever phone is still OFFHOOK
+        if self.context.t1.state == PhoneState.OFFHOOK:
+            self.context.t1.play_async([AUDIO_CONFIG["busy_loop"]])
+        if self.context.t2.state == PhoneState.OFFHOOK:
+            self.context.t2.play_async([AUDIO_CONFIG["busy_loop"]])
+            
         self.context.start_timer("post_call_timeout", 30.0, self.trigger_interruption)
 
     def trigger_interruption(self):
-        self.context.transition_to(DialingState(self.context, intro_file_key="interruption_sender_hangup"))
+        self.context.transition_to(DialingState(self.context))
 
     def on_exit(self):
         self.context.stop_timer("post_call_timeout")
-        self.context.sender.stop_audio()
+        self.context.t1.stop_audio()
+        self.context.t2.stop_audio()
 
     def on_offhook(self, phone):
-        if phone == self.context.receiver:
-            self.context.receiver.play_async([AUDIO_CONFIG["intro_wait"]])
-            self.context.transition_to(DialingState(self.context, intro_file_key="interruption_sender_hangup"))
+        self.context.sender = phone
+        self.context.receiver = self.context.get_other_phone(phone)
         return None
 
     def on_onhook(self, phone):
-        if phone == self.context.sender:
-            return IdleState(self.context)
-        return None
+        return IdleState(self.context)
 
 #--- VOICEMAIL STATES ------------------------#
 def construct_voicemail_playlist(context):
