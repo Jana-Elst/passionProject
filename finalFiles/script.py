@@ -49,6 +49,7 @@
 #------------------------ IMPORTS ------------------------#
 import os
 import sys
+import random
 import shutil
 import time
 import math
@@ -389,7 +390,18 @@ class AudioChannel:
 
     # Background thread that mixes audio or silence into the stream.
     def _engine_loop(self):
-        silence_chunk = b'\x00\x00\x00\x00' * CHUNK_SIZE
+        # Generate Dithered Silence (to prevent auto-mute/sleep)
+        # We use a static pattern of very low level numbers (-1, 0, 1)
+        # This keeps the DAC active without being audible (approx -90dB)
+        dither_buffer = bytearray(CHUNK_SIZE * 4) # Stereo 16-bit
+        for i in range(0, len(dither_buffer), 4):
+            # Random LSB dither
+            val_l = random.randint(-1, 1)
+            val_r = random.randint(-1, 1)
+            dither_buffer[i:i+2] = struct.pack('<h', val_l)
+            dither_buffer[i+2:i+4] = struct.pack('<h', val_r)
+        
+        silence_chunk = bytes(dither_buffer)
         
         while self.running:
             try:
@@ -440,7 +452,7 @@ class AudioChannel:
                     
             except Exception as e:
                 print(f"[{self.name}] Engine Exception: {e}")
-                time.sleep(0.5)
+                time.sleep(0.01) # Short recovery sleep
 
 #--- tone generator ---
 class SineWaveGenerator:
