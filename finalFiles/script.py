@@ -89,18 +89,22 @@ SILENCE_RINGBACK     = ("PAUSE", 2.0)
 SILENCE_RINGBACK_S   = ("PAUSE", 0.2)
 DIALING_SEQUENCE = [
     ("DTMF", 770, 1336, 0.2),  # Digit 5
-    ("PAUSE", 0.05),
+    ("PAUSE", 0.02),
     ("DTMF", 852, 1477, 0.2),  # Digit 9
-    ("PAUSE", 0.05),
+    ("PAUSE", 0.02),
     ("DTMF", 770, 1336, 0.2),  # Digit 5
-    ("PAUSE", 0.05),
+    ("PAUSE", 0.02),
     ("DTMF", 941, 1336, 0.2),  # Digit 0
-    ("PAUSE", 0.05),
+    ("PAUSE", 0.02),
     ("DTMF", 697, 1209, 0.2),  # Digit 1
-    ("PAUSE", 0.05),
+    ("PAUSE", 0.02),
     ("DTMF", 770, 1336, 0.2),  # Digit 5
-    ("PAUSE", 0.05), 
+    ("PAUSE", 0.02), 
     ("DTMF", 852, 1477, 0.2),  # Digit 9
+    ("PAUSE", 0.02),
+    ("DTMF", 770, 1477, 0.2),  # Digit 6
+    ("PAUSE", 0.02),
+    ("DTMF", 1633, 941, 0.2),  # Digit D
 ]
 CONNECTING_TONE = DIALING_SEQUENCE
 
