@@ -913,7 +913,7 @@ class RingingState(State):
 
         # Arduino Ringing
         # print(f"Sending {self.context.receiver.name}_BELL_START")
-        if self.context.main_serial:
+        # if self.context.main_serial:
             # self.context.main_serial.write(f"{self.context.receiver.name}_BELL_START\n".encode('utf-8'))
 
         # Voicemail Timer
