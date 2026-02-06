@@ -87,13 +87,19 @@ SILENCE_BUSY         = ("PAUSE", 0.375)
 TONE_RINGBACK        = ("TONE", 400, 0.4, 17, 0.95)
 SILENCE_RINGBACK     = ("PAUSE", 2.0)
 SILENCE_RINGBACK_S   = ("PAUSE", 0.2)
-CONNECTING_TONE = [
-("TONE", 440, 0.08), 
-    ("TONE", 880, 0.08), # Jump an octave for a "ping" effect
-    ("TONE", 554, 0.08),
-    ("TONE", 1108, 0.08),
-    ("PAUSE", 0.1)
+# Mimicking a standard 7-digit dial (e.g., 555-0199)
+# Format: (TONE, LowFreq, HighFreq, Duration)
+DIALING_SEQUENCE = [
+    ("DTMF", 770, 1336, 0.1),  # Digit 5
+    ("DTMF", 770, 1336, 0.1),  # Digit 5
+    ("DTMF", 770, 1336, 0.1),  # Digit 5
+    ("PAUSE", 0.1),            # Short gap between exchange and line
+    ("DTMF", 941, 1336, 0.1),  # Digit 0
+    ("DTMF", 697, 1209, 0.1),  # Digit 1
+    ("DTMF", 852, 1477, 0.1),  # Digit 9
+    ("DTMF", 852, 1477, 0.1),  # Digit 9
 ]
+CONNECTING_TONE = DIALING_SEQUENCE
 
 # Complex Sequences
 RINGBACK_SEQUENCE = [TONE_RINGBACK, SILENCE_RINGBACK_S, TONE_RINGBACK, SILENCE_RINGBACK]
@@ -509,6 +515,49 @@ class SineWaveGenerator:
             if self.phase > 2 * math.pi:
                 self.phase -= 2 * math.pi
                 
+            if self.phase > 2 * math.pi:
+                self.phase -= 2 * math.pi
+                
+        return bytes(output)
+
+class DualSineWaveGenerator:
+    """Generates dual-tone (DTMF) raw PCM data."""
+    def __init__(self, freq1: float, freq2: float, sample_rate: int = 48000, volume: float = 0.3):
+        self.freq1 = freq1
+        self.freq2 = freq2
+        self.sample_rate = sample_rate
+        self.volume = volume
+        self.phase1 = 0.0
+        self.phase2 = 0.0
+        self.running = True
+        
+    def getnchannels(self): return 1
+    
+    def readframes(self, n_frames: int) -> bytes:
+        if not self.running: return b""
+        
+        output = bytearray()
+        amplitude = 32767 * self.volume * 0.5 # Halve amplitude to prevent clipping when summing
+        
+        inc1 = (2 * math.pi * self.freq1) / self.sample_rate
+        inc2 = (2 * math.pi * self.freq2) / self.sample_rate
+        
+        for _ in range(n_frames):
+            # Mix two sines
+            val = math.sin(self.phase1) + math.sin(self.phase2)
+            sample_val = int(amplitude * val)
+            
+            # Clamp
+            sample_val = max(-32768, min(32767, sample_val))
+            
+            output.extend(struct.pack('<h', sample_val))
+            
+            self.phase1 += inc1
+            self.phase2 += inc2
+            
+            if self.phase1 > 2 * math.pi: self.phase1 -= 2 * math.pi
+            if self.phase2 > 2 * math.pi: self.phase2 -= 2 * math.pi
+            
         return bytes(output)
 #------------------------ PHONE LOGIC ------------------------#
 class Phone:
@@ -626,6 +675,17 @@ class Phone:
                     self.audio.play_generator(gen, stop_event, remaining)
                     return
 
+                elif cmd == "DTMF":
+                    # ("DTMF", low, high, duration)
+                    f1 = file[1]
+                    f2 = file[2]
+                    duration = file[3]
+                    remaining = max(0.1, duration - offset)
+                    
+                    gen = DualSineWaveGenerator(f1, f2, DEVICE_SAMPLE_RATE)
+                    self.audio.play_generator(gen, stop_event, remaining)
+                    return
+
             # Handle Filename
             path = f"{AUDIO_DIR}/{file}"
             if Path(path).exists():
@@ -688,6 +748,9 @@ def get_playlist_duration(playlist: List[Union[str, Tuple[str, float], List]]) -
                 total_time += file[1]
             elif file[0] == "TONE":
                 total_time += file[2]
+            elif file[0] == "DTMF":
+                # ("DTMF", f1, f2, duration)
+                total_time += file[3]
             continue
             
         path = f"{AUDIO_DIR}/{file}"
