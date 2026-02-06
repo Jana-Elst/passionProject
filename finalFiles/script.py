@@ -74,7 +74,7 @@ DEVICE_SAMPLE_RATE = 48000
 CHUNK_SIZE = 2048
 
 # Timers
-TIME_TILL_VOICEMAIL = 60.0
+TIME_TILL_VOICEMAIL = 15.0
 
 #--- Tone Definitions (Type, Freq, Duration, [ModFreq, ModIdx]) ---
 TONE_DIAL            = ("TONE", 425, 10.0) 
