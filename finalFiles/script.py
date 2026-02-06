@@ -147,8 +147,8 @@ AUDIO_CONFIG = {
     "ring_intro_suffix_2": ["sender-2.3.wav"], 
     "ringback_sequence":   RINGBACK_SEQUENCE,
 
-    "ring_receiver_wait_file": [TONE_CLICK, "receiver-1.wav"],
-    "ring_sender_wait_file": [TONE_CLICK, "sender-3.0.wav"],
+    "ring_receiver_wait_file": [TONE_CLICK,("PAUSE", 0.5), "receiver-1.wav"],
+    "ring_sender_wait_file": [TONE_CLICK,("PAUSE", 0.5), "sender-3.0.wav"],
     # Conversation Parts
     "conv_start_sender_1": ["sender-3.1.wav"],
     "conv_start_sender_2": ["sender-3.2.wav"],
@@ -168,11 +168,11 @@ AUDIO_CONFIG = {
 
     # Voicemail
     "vm_intro_parts": [
-        TONE_CLICK, "sender-V1.1.wav", "sender-V1.2.wav", "sender-V1.3.wav", 
-        "sender-V2.1.wav", "sender-V2.2.wav", TONE_CLICK
+        TONE_CLICK, ("PAUSE", 0.5), "sender-V1.1.wav", "sender-V1.2.wav", "sender-V1.3.wav", 
+        "sender-V2.1.wav", "sender-V2.2.wav", ("PAUSE", 0.5), TONE_CLICK
     ],
     "vm_prompt_end": ["sender-V3.wav"],
-    "vm_interruption_menu": [TONE_CLICK, ("LOOP", ["sender-V-interuption1.wav", TONE_DIAL])],
+    "vm_interruption_menu": [TONE_CLICK, ("PAUSE", 0.5), ("LOOP", ["sender-V-interuption1.wav", TONE_DIAL])],
     "vm_interruption_wait": [("PAUSE", 0.5),"receiver-V1.1.wav", BUSY_LOOP],
     "vm_interruption_wait_during_recording": ["receiver-V1.2.wav", BUSY_LOOP],
     "vm_choice_1_sender": ["sender-V-interuption2.1.wav"],
@@ -945,6 +945,9 @@ class DialingState(State):
 
     def on_enter(self):
         print(f"--- DIALING STATE ({self.context.sender.name}) ---")
+
+        if self.context.receiver.state == PhoneState.OFFHOOK:
+            self.context.receiver.play_async(AUDIO_CONFIG["busy_loop"])
         
         # Play Intro / Dial Tone + Reminder Loop
         intro_files = list(AUDIO_CONFIG[self.intro_file_key]) 
@@ -1193,16 +1196,26 @@ class ConversationState(State):
 class PostCallWaitState(State):
     def on_enter(self):
         print("--- POST CALL WAIT STATE ---")
+        self.phone_still_offhook = None
+
+        if self.context.t1.state == PhoneState.OFFHOOK:
+            self.phone_still_offhook = self.context.t1
+        elif self.context.t2.state == PhoneState.OFFHOOK:
+            self.phone_still_offhook = self.context.t2
         
         # Play busy loop on whichever phone is still OFFHOOK
-        if self.context.t1.state == PhoneState.OFFHOOK:
-            self.context.t1.play_async([AUDIO_CONFIG["busy_loop"]])
-        if self.context.t2.state == PhoneState.OFFHOOK:
-            self.context.t2.play_async([AUDIO_CONFIG["busy_loop"]])
+        if self.phone_still_offhook:
+            self.phone_still_offhook.play_async([AUDIO_CONFIG["busy_loop"]])
             
+        print("[PostCallWait] Starting 30s timer...")
         self.context.start_timer("post_call_timeout", 30.0, self.trigger_interruption)
 
     def trigger_interruption(self):
+        print("[PostCallWait] Timer fired! Transitioning to DialingState.")
+        if self.phone_still_offhook:
+            self.context.sender = self.phone_still_offhook
+            self.context.receiver = self.context.get_other_phone(self.phone_still_offhook)
+
         self.context.transition_to(DialingState(self.context))
 
     def on_exit(self):
@@ -1213,9 +1226,12 @@ class PostCallWaitState(State):
     def on_offhook(self, phone):
         self.context.sender = phone
         self.context.receiver = self.context.get_other_phone(phone)
+        self.context.transition_to(DialingState(self.context))
         return None
 
     def on_onhook(self, phone):
+        self.context.t1.stop_audio()
+        self.context.t2.stop_audio()
         return IdleState(self.context)
 
 #--- VOICEMAIL STATES ------------------------#
@@ -1228,9 +1244,9 @@ def construct_voicemail_playlist(context):
     question = f"question-{dialed_suffix}.wav"
     
     # [0-1] + topic + [2] + question + [3] + vm_file + [4] + question + [5-6]
-    files = [parts[0], parts[1], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), topic, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), parts[2], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), question, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), 
-             parts[3], vm_playback_file, parts[4], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), question, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC),
-             parts[5], parts[6]]
+    files = [parts[0], parts[1], parts[2], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), topic, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), parts[3], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), question, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), 
+             parts[4], vm_playback_file, parts[5], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), question, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC),
+             parts[6], parts[7]]
     return files
 
 
@@ -1300,9 +1316,15 @@ class VoicemailInterruptionState(State):
             
             print(f"Menu Choice: {number}")
             if str(number) == "1":
-                 return PreConnectedState(self.context, "vm_choice_1_sender", "vm_choice_1_receiver")
+                self.context.stop_timer("vm_record")
+                self.context.stop_timer("vm_limit")
+                self.context.stop_timer("vm_exit")
+                
+                return PreConnectedState(self.context, "vm_choice_1_sender", "vm_choice_1_receiver")
             elif str(number) == "2":
                  return VoicemailResumedState(self.context, resumption_point=self.resumption_point)
+            else:
+                self.context.sender.play_async(AUDIO_CONFIG["vm_interruption_menu"])
         return None
     
     def on_onhook(self, phone):
@@ -1371,7 +1393,6 @@ class VoicemailResumedState(State):
     def on_exit(self):
         self.context.stop_timer("vm_record")
         self.context.sender.stop_audio()
-        # self.context.receiver.stop_audio()
 
 class VoicemailRecording(State):
     def __init__(self, context):
@@ -1391,12 +1412,17 @@ class VoicemailRecording(State):
         self.context.sender.play_async(AUDIO_CONFIG["vm_prompt_end"])
         dur = get_playlist_duration(AUDIO_CONFIG["vm_prompt_end"])
 
-        if self.context.receiver.state == PhoneState.OFFHOOK:
-            self.context.sender, self.context.receiver = self.context.receiver, self.context.sender
-            self.context.start_timer("vm_exit", dur + 1.0, lambda: self.context.transition_to(DialingState(self.context, intro_file_key="vm_line_disconnected")))
-        else:
-            self.context.sender, self.context.receiver = self.context.receiver, self.context.sender
-            self.context.start_timer("vm_exit", dur + 1.0, lambda: self.context.transition_to(IdleState(self.context)))
+        def _complete_vm_logic():
+            if self.context.receiver.state == PhoneState.OFFHOOK:
+                # Other phone is still on -> they get the 'Line Disconnected' tone
+                self.context.sender, self.context.receiver = self.context.receiver, self.context.sender
+                self.context.receiver.play_async(AUDIO_CONFIG["busy_loop"])
+                self.context.transition_to(DialingState(self.context, intro_file_key="vm_line_disconnected"))
+            else:
+                # Other phone hung up -> we get Busy Signal
+                self.context.transition_to(PostCallWaitState(self.context))
+
+        self.context.start_timer("vm_exit", dur + 1.0, _complete_vm_logic)
 
     def save_and_cleanup(self):
         if not file_has_sound(self.temp_filename):
@@ -1428,7 +1454,7 @@ class VoicemailRecording(State):
 
     def on_onhook(self, phone):
         if phone == self.context.sender:
-            self.finish_recording() 
+            # self.finish_recording() 
             return IdleState(self.context)
         return None
 
@@ -1462,12 +1488,14 @@ class PhoneSystem:
 
     # --- Timers Helper ---
     def start_timer(self, name, duration, callback):
+        print(f"[TIMER] Starting '{name}' for {duration}s")
         self.stop_timer(name)
         self.timers[name] = threading.Timer(duration, callback)
         self.timers[name].start()
 
     def stop_timer(self, name):
         if name in self.timers:
+            print(f"[TIMER] Stopping '{name}'")
             self.timers[name].cancel()
             del self.timers[name]
 
