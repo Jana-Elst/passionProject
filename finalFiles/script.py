@@ -923,7 +923,7 @@ class RingingState(State):
         self.context.stop_timer("voicemail_timeout")
         # Ensure Bells Stop
         if self.context.main_serial:
-            self.context.main_serial.write(f"{self.context.receiver.name}_BELL_STOP\n".encode('utf-8'))
+            self.context.main_serial.write(f"{self.context.sender.name}_BELL_STOP\n".encode('utf-8'))
 
     def trigger_voicemail(self):
         self.context.transition_to(VoicemailIntro(self.context))
