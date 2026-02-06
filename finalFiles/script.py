@@ -79,7 +79,7 @@ TIME_TILL_VOICEMAIL = 15.0
 
 #--- Tone Definitions (Type, Freq, Duration, [ModFreq, ModIdx]) ---
 TONE_DIAL            = ("TONE", 425, 10.0) 
-TONE_DIAL_SHORT      = ("TONE", 425, 5.0)
+TONE_DIAL_SHORT      = ("TONE", 425, 3.0)
 TONE_DTMF_FEEDBACK   = ("TONE", 600, 0.15) # Short blip when user dials a digit
 TONE_CLICK           = ("TONE", 500, 0.30)
 TONE_BUSY            = ("TONE", 400, 0.375)
@@ -88,19 +88,19 @@ TONE_RINGBACK        = ("TONE", 400, 0.4, 17, 0.95)
 SILENCE_RINGBACK     = ("PAUSE", 2.0)
 SILENCE_RINGBACK_S   = ("PAUSE", 0.2)
 DIALING_SEQUENCE = [
-    ("DTMF", 770, 1336, 1.2),  # Digit 5
-    ("PAUSE", 0.4),
-    ("DTMF", 852, 1477, 1.2),  # Digit 9
-    ("PAUSE", 0.4),
-    ("DTMF", 770, 1336, 1.2),  # Digit 5
-    ("PAUSE", 0.4),
-    ("DTMF", 941, 1336, 1.2),  # Digit 0
-    ("PAUSE", 0.4),
-    ("DTMF", 697, 1209, 1.2),  # Digit 1
-    ("PAUSE", 0.4),
-    ("DTMF", 770, 1336, 1.2),  # Digit 5
-    ("PAUSE", 0.4), 
-    ("DTMF", 852, 1477, 1.2),  # Digit 9
+    ("DTMF", 770, 1336, 0.6),  # Digit 5
+    ("PAUSE", 0.2),
+    ("DTMF", 852, 1477, 0.6),  # Digit 9
+    ("PAUSE", 0.2),
+    ("DTMF", 770, 1336, 0.6),  # Digit 5
+    ("PAUSE", 0.2),
+    ("DTMF", 941, 1336, 0.6),  # Digit 0
+    ("PAUSE", 0.2),
+    ("DTMF", 697, 1209, 0.6),  # Digit 1
+    ("PAUSE", 0.2),
+    ("DTMF", 770, 1336, 0.6),  # Digit 5
+    ("PAUSE", 0.2), 
+    ("DTMF", 852, 1477, 0.6),  # Digit 9
 ]
 CONNECTING_TONE = DIALING_SEQUENCE
 
