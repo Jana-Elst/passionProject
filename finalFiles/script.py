@@ -76,6 +76,7 @@ CHUNK_SIZE = 2048
 
 # Timers
 TIME_TILL_VOICEMAIL = 15.0
+PAUSE_AROUND_QUESTION_OR_TOPIC = 0.2
 
 #--- Tone Definitions (Type, Freq, Duration, [ModFreq, ModIdx]) ---
 TONE_DIAL            = ("TONE", 425, 10.0) 
@@ -1129,13 +1130,13 @@ class ConnectedState(State):
         question = f"question-{dialed_suffix}.wav"
 
         # Sender Parts
-        s_part1 = [AUDIO_CONFIG["conv_start_sender_1"], ("PAUSE", 1),
+        s_part1 = [AUDIO_CONFIG["conv_start_sender_1"], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC),
                 topic, 
-                ("PAUSE", 1), AUDIO_CONFIG["conv_start_sender_2"], ("PAUSE", 1), question, ("PAUSE", 1)]
+                ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), AUDIO_CONFIG["conv_start_sender_2"], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), question, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC)]
         s_part2 = [AUDIO_CONFIG["conv_start_sender_3"]]
         
         # Receiver Parts
-        r_part1 = [AUDIO_CONFIG["conv_start_receiver_1"], ("PAUSE", 1), question, ("PAUSE", 1)]
+        r_part1 = [AUDIO_CONFIG["conv_start_receiver_1"], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), question, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC)]
         r_part2 = [AUDIO_CONFIG["conv_start_receiver_2"]]
         
         return (s_part1, s_part2), (r_part1, r_part2)
@@ -1226,8 +1227,8 @@ def construct_voicemail_playlist(context):
     question = f"question-{dialed_suffix}.wav"
     
     # [0-1] + topic + [2] + question + [3] + vm_file + [4] + question + [5-6]
-    files = [parts[0], parts[1], ("PAUSE", 1), topic, ("PAUSE", 1), parts[2], ("PAUSE", 1), question, ("PAUSE", 1), 
-             parts[3], vm_playback_file, parts[4], ("PAUSE", 1), question, ("PAUSE", 1),
+    files = [parts[0], parts[1], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), topic, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), parts[2], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), question, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), 
+             parts[3], vm_playback_file, parts[4], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), question, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC),
              parts[5], parts[6]]
     return files
 
