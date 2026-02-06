@@ -143,12 +143,12 @@ AUDIO_CONFIG = {
         "sender-V2.1.wav", "sender-V2.2.wav", TONE_CLICK
     ],
     "vm_prompt_end": ["sender-V3.wav"],
-    "vm_interruption_menu": ["sender-V-interuption1.wav"],
-    "vm_interruption_wait": ["receiver-V1.1.wav"],
+    "vm_interruption_menu": [("LOOP", ["sender-V-interuption1.wav", TONE_DIAL])],
+    "vm_interruption_wait": ["receiver-V1.1.wav", BUSY_LOOP],
     "vm_choice_1_sender": ["sender-V-interuption2.1.wav"],
     "vm_choice_1_receiver": ["receiver-V2.1.wav"],
     "vm_choice_2_sender": ["sender-V-interuption2.2.wav"],
-    "vm_choice_2_receiver": ["receiver-V2.2.wav"],
+    "vm_choice_2_receiver": ["receiver-V2.2.wav", BUSY_LOOP],
 }
 
 PhoneState = Enum("PhoneState", ["OFFHOOK", "ONHOOK"])
@@ -839,7 +839,7 @@ class DialingState(State):
                 self.context.question = current_input
                 
                 if self.context.receiver.state == PhoneState.OFFHOOK:
-                    return PreConnectedState(self.context)
+                    return PreConnectedState(self.context, "ring_sender_preconnected", "ring_receiver_preconnected")
                 else:
                     return RingingState(self.context)
             
@@ -899,7 +899,7 @@ class RingingState(State):
 
     def on_offhook(self, phone):
         if phone == self.context.receiver:
-            return IntroConnectedState(self.context)
+            return PreConnectedState(self.context, "ring_sender_wait_file", "ring_receiver_wait_file")
         return None
 
     def on_onhook(self, phone):
@@ -908,10 +908,15 @@ class RingingState(State):
         return None
 
 class PreConnectedState(State):
+    def __init__(self, context, sender_key, receiver_key):
+        super().__init__(context)
+        self.sender_key = sender_key
+        self.receiver_key = receiver_key
+
     def on_enter(self):
-        print("--- PRE-CONNECTED STATE ---")
-        sender_files = AUDIO_CONFIG["ring_sender_preconnected"]
-        receiver_files = AUDIO_CONFIG["ring_receiver_preconnected"]
+        print(f"--- PRE-CONNECTED STATE ({self.sender_key}) ---")
+        sender_files = AUDIO_CONFIG[self.sender_key]
+        receiver_files = AUDIO_CONFIG[self.receiver_key]
         
         self.context.sender.play_async(sender_files)
         self.context.receiver.play_async(receiver_files)
@@ -921,34 +926,10 @@ class PreConnectedState(State):
         dur2 = get_playlist_duration(receiver_files)
         max_dur = max(dur1, dur2)
         
-        self.context.start_timer("preconnected_transition", max_dur + 0.5, lambda: self.context.transition_to(ConnectedState(self.context)))
+        self.context.start_timer("sync_wait_transition", max_dur + 0.5, lambda: self.context.transition_to(ConnectedState(self.context)))
 
     def on_exit(self):
-        self.context.stop_timer("preconnected_transition")
-        self.context.sender.stop_audio()
-        self.context.receiver.stop_audio()
-        
-    def on_onhook(self, phone): 
-        return self.handle_onhook_during_setup_conversation(phone)
-
-class IntroConnectedState(State):
-    def on_enter(self):
-        print("--- INTRO CONNECTED STATE ---")
-        sender_files = AUDIO_CONFIG["ring_sender_wait_file"]
-        receiver_files = AUDIO_CONFIG["ring_receiver_wait_file"]
-        
-        self.context.sender.play_async(sender_files)
-        self.context.receiver.play_async(receiver_files)
-
-        # Calculate duration and transition
-        dur1 = get_playlist_duration(sender_files)
-        dur2 = get_playlist_duration(receiver_files)
-        max_dur = max(dur1, dur2)
-        
-        self.context.start_timer("preconnected_transition", max_dur + 0.5, lambda: self.context.transition_to(ConnectedState(self.context)))
-
-    def on_exit(self):
-        self.context.stop_timer("preconnected_transition")
+        self.context.stop_timer("sync_wait_transition")
         self.context.sender.stop_audio()
         self.context.receiver.stop_audio()
         
@@ -1125,13 +1106,11 @@ class VoicemailIntro(State):
         return None
 
     def on_exit(self):
-        self.context.stop_timer("vm_record")
         self.context.sender.stop_audio()
-        
+
 class VoicemailInterruptionState(State):
-    def __init__(self, context, was_recording=False, resumption_point=None):
+    def __init__(self, context, resumption_point=None):
         super().__init__(context)
-        self.was_recording = was_recording
         self.resumption_point = resumption_point
 
     def on_enter(self):
@@ -1152,19 +1131,86 @@ class VoicemailInterruptionState(State):
             # Menu Choice
             print(f"Menu Choice: {number}")
             if str(number) == "1":
-                 return ConnectedState(self.context)
+                 return PreConnectedState(self.context, "vm_choice_1_sender", "vm_choice_1_receiver")
             elif str(number) == "2":
-                 if self.resumption_point:
-                     self.context.voicemail_resume_point = self.resumption_point
-                 return VoicemailIntro(self.context)
+                 return VoicemailResumedState(self.context, resumption_point=self.resumption_point)
         return None
     
     def on_onhook(self, phone):
         if phone == self.context.receiver:
             return VoicemailIntro(self.context)
         if phone == self.context.sender:
-            return IdleState(self.context)
+            self.context.sender, self.context.receiver = self.context.receiver, self.context.sender
+            return DialingState(self.context, intro_file_key="interruption_sender_hangup")
         return None
+
+        return None
+
+class VoicemailResumedState(State):
+    def __init__(self, context, resumption_point=None):
+        super().__init__(context)
+        self.resumption_point = resumption_point
+
+    def on_enter(self):
+        print("--- VOICEMAIL RESUMED (REC. WAITING) ---")
+        
+        # 1. Resume Sender Audio
+        dialed_suffix = self.context.question
+        vm_playback_file = f"voicemail-{self.context.sender.name}-{dialed_suffix}.wav"
+        topic = f"topic-{dialed_suffix}.wav"
+        question = f"question-{dialed_suffix}.wav"
+
+        intro_parts = AUDIO_CONFIG["vm_intro_parts"]
+        files = [intro_parts[0], intro_parts[1], topic, intro_parts[2], question, 
+                 intro_parts[3], vm_playback_file, intro_parts[4], question, 
+                 intro_parts[5], intro_parts[6]]
+                 
+        start_idx = 0
+        start_off = 0.0
+        
+        if self.resumption_point:
+            start_idx, start_off = self.resumption_point
+            print(f"Resuming VM at Index {start_idx}, Offset {start_off:.2f}s")
+        
+        self.context.sender.play_async(AUDIO_CONFIG["vm_choice_2_sender"])
+        self.context.sender.play_async(files, start_index=start_idx, start_offset=start_off)
+        
+        # 2. Play Wait Loop for Receiver
+        self.context.receiver.play_async(AUDIO_CONFIG["vm_choice_2_receiver"]) # Reuse existing loop
+        
+        # 3. Timer for Recording Transition
+        remaining_files = files[start_idx:]
+        remaining_duration = get_playlist_duration(remaining_files) - start_off
+        remaining_duration = max(0.1, remaining_duration)
+        
+        self.context.start_timer("vm_record", remaining_duration + 0.5, self.start_recording)
+
+    def start_recording(self):
+        # Stop receiver wait music before recording
+        self.context.receiver.stop_audio()
+        self.context.transition_to(VoicemailRecording(self.context))
+
+    def on_onhook(self, phone):
+        if phone == self.context.receiver:
+            print("Receiver hung up -> Continuing VM for Sender")
+            self.context.receiver.stop_audio()
+            # We can transition to simple VoicemailIntro to continue (seamlessly?)
+            # or just stay here. Transitioning cleans up state.
+            
+            # Capture current point to ensure seamless transition if we switch states
+            idx, offset = self.context.sender.get_playback_status()
+            self.context.voicemail_resume_point = (idx, offset)
+            
+            return VoicemailIntro(self.context)
+            
+        if phone == self.context.sender:
+             return IdleState(self.context)
+        return None
+
+    def on_exit(self):
+        self.context.stop_timer("vm_record")
+        self.context.sender.stop_audio()
+        self.context.receiver.stop_audio()
 
 class VoicemailRecording(State):
     def __init__(self, context):
