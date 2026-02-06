@@ -35,7 +35,7 @@ struct PhoneConfig {
 const PhoneConfig phoneConfigs[2] = {
     // pickupThreshold (High/Rising), hangupThreshold (Low/Falling), timeout(ms)
     {45, 20, 600}, // T1 (Off-hook: ~60-65, Bottom: ~10)
-    {60, 30, 600}  // T2 (Off-hook: ~80-90)
+    {60, 15, 600}  // T2 (Off-hook: ~80-90, Connected: ~35)
 };
 
 //--- STATE & VARIABLES
@@ -54,7 +54,8 @@ PhoneState phoneStates[2] = {
 };
 
 const int RelayStabilityPause =
-    200; // Wait after connection before allowing break (ms)
+    1000; // Wait after connection before allowing break (ms)
+unsigned long lastRelayChangeTime = 0;
 
 //------------------------ SETUP ------------------------//
 void setup() {
@@ -100,6 +101,12 @@ void loop() {
 
   //--- 1. Check Serial Commands
   checkSerialCommands();
+
+  //--- 1.2 Check Relay Stability
+  if (millis() - lastRelayChangeTime < RelayStabilityPause) {
+    delay(10);
+    return;
+  }
 
   //--- 1.5 Manage Bell
   manageBell(0); // T1
@@ -211,10 +218,12 @@ void checkSerialCommands() {
     // "R1_OPEN" = Open the channel / Connect the phones (Relay HIGH)
     if (cmd == "R1_OPEN") {
       digitalWrite(R1_PIN, HIGH);
+      lastRelayChangeTime = millis();
     }
     // "R1_CLOSE" = Close the channel / Disconnect (Relay LOW)
     else if (cmd == "R1_CLOSE") {
       digitalWrite(R1_PIN, LOW);
+      lastRelayChangeTime = millis();
     }
 
     //--- RINGING

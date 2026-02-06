@@ -11,13 +11,13 @@ const int measurePinT2 = A2;
 void setup() {
   // Set the relay pin as an OUTPUT
   pinMode(RELAY_PIN1, OUTPUT);
-    pinMode(R2, OUTPUT);
+  pinMode(R2, OUTPUT);
   pinMode(R3, OUTPUT);
 
   
   // Start with the relay OFF (NC connected to C)
-  digitalWrite(RELAY_PIN1, HIGH);
-    digitalWrite(R2, LOW);
+  digitalWrite(RELAY_PIN1, LOW);
+  digitalWrite(R2, LOW);
   digitalWrite(R2, LOW);
 
   
@@ -27,7 +27,7 @@ void setup() {
 }
 
 void loop() {
-    int valueT1 = analogRead(measurePinT1);
+  int valueT1 = analogRead(measurePinT1);
   int valueT2 = analogRead(measurePinT2);
 
   Serial.print(valueT1);
