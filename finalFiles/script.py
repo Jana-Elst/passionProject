@@ -76,7 +76,7 @@ CHUNK_SIZE = 2048
 
 # Timers
 TIME_TILL_VOICEMAIL = 15.0
-PAUSE_AROUND_QUESTION_OR_TOPIC = 0.2
+PAUSE_AROUND_QUESTION_OR_TOPIC = 0.5
 
 #--- Tone Definitions (Type, Freq, Duration, [ModFreq, ModIdx]) ---
 TONE_DIAL            = ("TONE", 425, 10.0) 
@@ -1036,9 +1036,9 @@ class RingingState(State):
             
             files = [
                 AUDIO_CONFIG["ring_intro_prefix"], 
-                ("PAUSE", 1),
+                ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC),
                 topic, 
-                ("PAUSE", 1),
+                ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC),
                 AUDIO_CONFIG["ring_intro_suffix_1"], 
                 AUDIO_CONFIG["ring_intro_suffix_2"]
             ]
