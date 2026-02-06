@@ -1085,7 +1085,7 @@ class PreConnectedState(State):
 
     def on_enter(self):
         print(f"--- PRE-CONNECTED STATE ({self.sender_key}) ---")
-        sender_files = AUDIO_CONFIG[self.sender_key]
+        sender_files = AUDIO_CONFIG[self.sender_key] + [CONNECTING_TONE]
         receiver_files = AUDIO_CONFIG[self.receiver_key]
         
         self.context.sender.play_async(sender_files)
