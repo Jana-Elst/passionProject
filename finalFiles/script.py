@@ -242,7 +242,7 @@ class AudioChannel:
             print(f"[{self.name}] CRITICAL: Failed to open stream: {e}")
             return None
 
-    def play(self, filename: str, stop_event: threading.Event):
+    def play(self, filename: str, stop_event: threading.Event, start_offset: float = 0.0):
         """Queue a file to be played by the engine loop."""
 
         # Check if the stream is open
@@ -270,6 +270,12 @@ class AudioChannel:
 
                 print(f"[{self.name}] Playing {path} (@ {native_rate}Hz)...")
 
+                if start_offset > 0:
+                     start_frame = int(start_offset * native_rate)
+                     if start_frame < audio_file_reader.getnframes():
+                         audio_file_reader.setpos(start_frame)
+                         print(f"[{self.name}] Seeking to {start_offset:.2f}s")
+
                 # Wait for playback to finish
                 while not stop_event.is_set():
                     if not self.is_playing:
@@ -287,6 +293,20 @@ class AudioChannel:
         except Exception as e:
             print(f"[{self.name}] Play Error: {e}")
             self.is_playing = False
+
+    def get_elapsed_time(self) -> float:
+        """Returns the current playback position in seconds."""
+        with self.engine_lock:
+            if self.active_audio_file and self.is_playing:
+                try:
+                    # Generic for Wave_read
+                    if hasattr(self.active_audio_file, 'tell') and hasattr(self.active_audio_file, 'getframerate'):
+                         return self.active_audio_file.tell() / self.active_audio_file.getframerate()
+                    # For Generator (approximate or just 0)
+                    return 0.0 
+                except Exception:
+                    return 0.0
+        return 0.0
 
     def play_generator(self, generator, stop_event: threading.Event, duration: float = None):
         """Plays audio from a generator object (like SineWaveGenerator)."""
@@ -480,12 +500,22 @@ class Phone:
         # Audio Threading
         self._current_stop_event: Optional[threading.Event] = None
         self.thread: Optional[threading.Thread] = None
+        
+        # Playback State Tracking
+        self.current_playlist_index = 0
+        self.current_playlist = []
+
+    def get_playback_status(self):
+        """Returns (index, offset) of current playback."""
+        idx = self.current_playlist_index
+        offset = self.audio.get_elapsed_time()
+        return idx, offset
 
     def set_state(self, new_state: str):
         print(f"Phone {self.number} State: {self.state} -> {new_state}")
         self.state = new_state
 
-    def play_async(self, playlist: List[Union[str, Tuple[str, float], List]]):
+    def play_async(self, playlist: List[Union[str, Tuple[str, float], List]], start_index: int = 0, start_offset: float = 0.0):
         """
         Play a list of files or pauses in a background thread.
         Playlist items can be: "filename.wav", ("PAUSE", 1.0), or a sub-list.
@@ -497,8 +527,6 @@ class Phone:
         self._current_stop_event = stop_event
         
         # Flatten playlist, but preserve LOOP tuples as single items
-        #TODO: what is this?
-        # Can this be written easier?
         def _flatten(items):
             result = []
             for item in items:
@@ -511,11 +539,19 @@ class Phone:
             return result
             
         flat_playlist = _flatten(playlist)
+        self.current_playlist = flat_playlist # Store for debug/reference
         
         def _play_sequence():
-            for file in flat_playlist:
+            for i, file in enumerate(flat_playlist):
+                if i < start_index: continue # Skip played items
+                
+                self.current_playlist_index = i
+                
                 if stop_event.is_set():
                     break
+                
+                # Determine offset
+                current_offset = start_offset if i == start_index else 0.0
                 
                 # Handle LOOP (Infinite Repeat)
                 if isinstance(file, tuple) and file[0] == "LOOP":
@@ -526,13 +562,12 @@ class Phone:
                     while not stop_event.is_set():
                         for tick in loop_flat:
                             if stop_event.is_set(): break
-                            # Recursive-ish call to play item logic (duplicated for safety/simplicity)
-                            _play_single_item(tick)
+                            _play_single_item(tick, 0.0) # Loops shouldn't really resume mid-loop easily
                     continue
 
-                _play_single_item(file)
+                _play_single_item(file, current_offset)
 
-        def _play_single_item(file):
+        def _play_single_item(file, offset):
             if stop_event.is_set(): return
             
             # Handle Tuple (e.g., PAUSE, TONE)
@@ -540,31 +575,36 @@ class Phone:
                 cmd = file[0]
                 if cmd == "PAUSE":
                     duration = file[1]
-                    print(f"Phone {self.number}: Pausing for {duration:.2f}s")
+                    effective_duration = max(0, duration - offset)
                     
-                    # Sleep in chunks to allow interruption
-                    elapsed = 0
-                    while elapsed < duration:
-                        if stop_event.is_set(): break
-                        time.sleep(0.1)
-                        elapsed += 0.1
+                    if effective_duration > 0:
+                        print(f"Phone {self.number}: Pausing for {effective_duration:.2f}s (resumed)" if offset > 0 else f"Phone {self.number}: Pausing for {duration:.2f}s")
+                        
+                        elapsed = 0
+                        while elapsed < effective_duration:
+                            if stop_event.is_set(): break
+                            time.sleep(0.1)
+                            elapsed += 0.1
                     return
                 elif cmd == "TONE":
                     frequency = file[1]
                     duration = file[2]
+                    # Tones restart for now (or implement duration - offset)
+                    remaining = max(0.1, duration - offset)
+                    
                     # Support optional modulation parameters: 
                     # ("TONE", freq, dur, mod_freq, mod_index)
                     mod_freq = file[3] if len(file) > 3 else None
                     mod_index = file[4] if len(file) > 4 else 0.0
                     
                     gen = SineWaveGenerator(frequency, DEVICE_SAMPLE_RATE, mod_freq=mod_freq, mod_index=mod_index)
-                    self.audio.play_generator(gen, stop_event, duration)
+                    self.audio.play_generator(gen, stop_event, remaining)
                     return
 
             # Handle Filename
             path = f"{AUDIO_DIR}/{file}"
             if Path(path).exists():
-                self.audio.play(path, stop_event)
+                self.audio.play(path, stop_event, start_offset=offset)
             else: 
                  print(f"File not found or skipped: {path}")
 
@@ -855,7 +895,7 @@ class RingingState(State):
             self.context.main_serial.write(f"{self.context.receiver.name}_BELL_STOP\n".encode('utf-8'))
 
     def trigger_voicemail(self):
-        self.context.transition_to(VoicemailState(self.context))
+        self.context.transition_to(VoicemailIntro(self.context))
 
     def on_offhook(self, phone):
         if phone == self.context.receiver:
@@ -1031,8 +1071,6 @@ class PostCallWaitState(State):
 class VoicemailIntro(State):
     def __init__(self, context):
         super().__init__(context)
-        self.temp_filename = "temp_recording.wav"
-        self.recording = False
 
     def on_enter(self):
         print("--- VOICEMAIL STATE ---")
@@ -1047,9 +1085,25 @@ class VoicemailIntro(State):
                  intro_parts[3], vm_playback_file, intro_parts[4], question, 
                  intro_parts[5], intro_parts[6]]
                  
-        self.context.sender.play_async(files)
-        duration = get_playlist_duration(files)
-        self.context.start_timer("vm_record", duration + 0.5, self.start_recording)
+        # Check for Resumption
+        start_idx = 0
+        start_off = 0.0
+        
+        resume_point = getattr(self.context, "voicemail_resume_point", None)
+        if resume_point:
+            start_idx, start_off = resume_point
+            print(f"Resuming VM at Index {start_idx}, Offset {start_off:.2f}s")
+            self.context.voicemail_resume_point = None # Clear it
+                 
+        self.context.sender.play_async(files, start_index=start_idx, start_offset=start_off)
+        
+        # Calculate Remaining Duration for Timer
+        # We need duration of files[start_idx:] - start_off
+        remaining_files = files[start_idx:]
+        remaining_duration = get_playlist_duration(remaining_files) - start_off
+        remaining_duration = max(0.1, remaining_duration)
+        
+        self.context.start_timer("vm_record", remaining_duration + 0.5, self.start_recording)
 
     def start_recording(self):
         self.context.transition_to(VoicemailRecording(self.context))
@@ -1057,7 +1111,12 @@ class VoicemailIntro(State):
     def on_offhook(self, phone):
         if phone == self.context.receiver:
             print("Receiver Interrupted Voicemail Intro!")
-            return VoicemailInterruptionState(self.context)
+            
+            # Capture Resumption Point
+            idx, offset = self.context.sender.get_playback_status()
+            print(f"Pausing VM at Index {idx}, Offset {offset:.2f}s")
+            
+            return VoicemailInterruptionState(self.context, resumption_point=(idx, offset))
         return None
 
     def on_onhook(self, phone):
@@ -1068,6 +1127,44 @@ class VoicemailIntro(State):
     def on_exit(self):
         self.context.stop_timer("vm_record")
         self.context.sender.stop_audio()
+        
+class VoicemailInterruptionState(State):
+    def __init__(self, context, was_recording=False, resumption_point=None):
+        super().__init__(context)
+        self.was_recording = was_recording
+        self.resumption_point = resumption_point
+
+    def on_enter(self):
+        print("--- VM INTERRUPTION MENU ---")
+        self.context.stop_all_audio() # Stop VM playback/recording
+        
+        self.context.sender.play_async(AUDIO_CONFIG["vm_interruption_menu"])
+        self.context.receiver.play_async(AUDIO_CONFIG["vm_interruption_wait"])
+        
+        self.context.t1.dial_buffer = "" 
+
+    def on_dial(self, phone, number):
+        if phone == self.context.sender:
+            # Feedback Tone
+            self.context.sender.stop_audio()
+            self.context.sender.play_async(AUDIO_CONFIG["dial_feedback"])
+            
+            # Menu Choice
+            print(f"Menu Choice: {number}")
+            if str(number) == "1":
+                 return ConnectedState(self.context)
+            elif str(number) == "2":
+                 if self.resumption_point:
+                     self.context.voicemail_resume_point = self.resumption_point
+                 return VoicemailIntro(self.context)
+        return None
+    
+    def on_onhook(self, phone):
+        if phone == self.context.receiver:
+            return VoicemailIntro(self.context)
+        if phone == self.context.sender:
+            return IdleState(self.context)
+        return None
 
 class VoicemailRecording(State):
     def __init__(self, context):
@@ -1113,6 +1210,7 @@ class VoicemailRecording(State):
     def on_offhook(self, phone):
         if phone == self.context.receiver:
             # sound receiver sender is busy
+            pass
         return None
 
     def on_onhook(self, phone):
@@ -1125,41 +1223,6 @@ class VoicemailRecording(State):
         self.context.stop_timer("vm_limit")
         self.context.stop_timer("vm_exit")
         if self.recording: self.context.sender.stop_audio()
-
-class VoicemailInterruptionState(State):
-    def __init__(self, context, was_recording):
-        super().__init__(context)
-        self.was_recording = was_recording
-
-    def on_enter(self):
-        print("--- VM INTERRUPTION MENU ---")
-        self.context.stop_all_audio() # Stop VM playback/recording
-        
-        self.context.sender.play_async(AUDIO_CONFIG["vm_interruption_menu"])
-        self.context.receiver.play_async(AUDIO_CONFIG["vm_interruption_wait"])
-        
-        self.context.t1.dial_buffer = "" 
-
-    def on_dial(self, phone, number):
-        if phone == self.context.sender:
-            # Feedback Tone
-            self.context.sender.stop_audio()
-            self.context.sender.play_async(AUDIO_CONFIG["dial_feedback"])
-            
-            # Menu Choice
-            print(f"Menu Choice: {number}")
-            if str(number) == "1":
-                 return ConnectedState(self.context)
-            elif str(number) == "2":
-                 return VoicemailState(self.context)
-        return None
-    
-    def on_onhook(self, phone):
-        if phone == self.context.receiver:
-            return VoicemailState(self.context)
-        if phone == self.context.sender:
-            return IdleState(self.context)
-        return None
 
 class PhoneSystem:
     def __init__(self, device_map):
