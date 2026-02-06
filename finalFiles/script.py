@@ -87,17 +87,15 @@ SILENCE_BUSY         = ("PAUSE", 0.375)
 TONE_RINGBACK        = ("TONE", 400, 0.4, 17, 0.95)
 SILENCE_RINGBACK     = ("PAUSE", 2.0)
 SILENCE_RINGBACK_S   = ("PAUSE", 0.2)
-# Mimicking a standard 7-digit dial (e.g., 555-0199)
-# Format: (TONE, LowFreq, HighFreq, Duration)
 DIALING_SEQUENCE = [
-    ("DTMF", 770, 1336, 0.1),  # Digit 5
-    ("DTMF", 770, 1336, 0.1),  # Digit 5
-    ("DTMF", 770, 1336, 0.1),  # Digit 5
-    ("PAUSE", 0.1),            # Short gap between exchange and line
-    ("DTMF", 941, 1336, 0.1),  # Digit 0
-    ("DTMF", 697, 1209, 0.1),  # Digit 1
-    ("DTMF", 852, 1477, 0.1),  # Digit 9
-    ("DTMF", 852, 1477, 0.1),  # Digit 9
+    ("DTMF", 770, 1336, 0.5),  # Digit 5
+    ("DTMF", 852, 1477, 0.5),  # Digit 9
+    ("DTMF", 770, 1336, 0.5),  # Digit 5
+    ("PAUSE", 0.5),            # Short gap between exchange and line
+    ("DTMF", 941, 1336, 0.5),  # Digit 0
+    ("DTMF", 697, 1209, 0.5),  # Digit 1
+    ("DTMF", 770, 1336, 0.5),  # Digit 5
+    ("DTMF", 852, 1477, 0.5),  # Digit 9
 ]
 CONNECTING_TONE = DIALING_SEQUENCE
 
