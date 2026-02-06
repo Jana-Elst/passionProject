@@ -1235,7 +1235,12 @@ class PostCallWaitState(State):
         return None
 
     def on_onhook(self, phone):
-        # Only go to Idle if the phone keeping the session alive hangs up
+        # 1. Debounce Check
+        if getattr(self, "ignore_hook_events", False):
+            print(f"[PostCallWait] Ignoring transient ONHOOK from {phone.name} (Debounce)")
+            return None
+
+        # 2. Identity Check: Only go to Idle if the phone keeping the session alive hangs up
         if self.phone_still_offhook and phone != self.phone_still_offhook:
              return None
              
