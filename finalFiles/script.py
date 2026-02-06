@@ -1207,11 +1207,16 @@ class PostCallWaitState(State):
         if self.phone_still_offhook:
             self.phone_still_offhook.play_async([AUDIO_CONFIG["busy_loop"]])
             
-        print("[PostCallWait] Starting 30s timer...")
         self.context.start_timer("post_call_timeout", 30.0, self.trigger_interruption)
 
+        # Debounce ONHOOK events for 2 seconds to ignore transient relay noise
+        self.ignore_hook_events = True
+        self.context.start_timer("debounce_hooks", 2.0, self.enable_hooks)
+
+    def enable_hooks(self):
+        self.ignore_hook_events = False
+
     def trigger_interruption(self):
-        print("[PostCallWait] Timer fired! Transitioning to DialingState.")
         if self.phone_still_offhook:
             self.context.sender = self.phone_still_offhook
             self.context.receiver = self.context.get_other_phone(self.phone_still_offhook)
