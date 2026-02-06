@@ -1367,6 +1367,31 @@ class PhoneSystem:
             self.transition_to(next_state)
 
 #------------------------ HELPERS & MAIN ------------------------#
+# --- LINUX/ALSA HELPER ---
+def get_alsa_card_index(target_name: str) -> Optional[int]:
+    """
+    Parses /proc/asound/cards to find the card index for a given name.
+    Example Line: " 2 [T1             ]: USB-Audio - USB Audio Device"
+    """
+    if not os.path.exists("/proc/asound/cards"):
+        return None
+
+    try:
+        with open("/proc/asound/cards", "r") as f:
+            for line in f:
+                # Regex: Start with number, space, [Name]
+                # Match:  2 [T1             ]
+                match = re.match(r"^\s*(\d+)\s+\[(\w+)\s*\]", line)
+                if match:
+                    card_idx = int(match.group(1))
+                    card_name = match.group(2)
+                    if card_name == target_name:
+                        return card_idx
+    except Exception as e:
+        print(f"Error parsing ALSA cards: {e}")
+        
+    return None
+
 def find_devices() -> Dict[str, Any]:
     print("Searching for Serial Device")
     ports = list(serial.tools.list_ports.comports())
@@ -1400,41 +1425,70 @@ def find_devices() -> Dict[str, Any]:
                          ser.close()
                 except Exception as e:
                     print(f"Connection failed {p.device}: {e}")
-                    # If we opened it but failed handshake, try to close
-                    # (In a real scenario we'd track 'ser' scope better)
                     pass
 
     print("Searching for Audio Devices...")
     print("TIP: If volume is low on Raspberry Pi, run 'alsamixer' in terminal and press F6 to select sound card.")
-    p = pyaudio.PyAudio()
-    audio_devices = []
     
-    for i in range(p.get_device_count()):
+    p = pyaudio.PyAudio()
+    
+    # 1. Find Target Card Indices from OS
+    # User has named cards "T1" and "T2"
+    card_idx_t1 = get_alsa_card_index("T1")
+    card_idx_t2 = get_alsa_card_index("T2")
+    
+    if card_idx_t1 is not None: print(f"Found ALSA Card 'T1' at Index {card_idx_t1}")
+    if card_idx_t2 is not None: print(f"Found ALSA Card 'T2' at Index {card_idx_t2}")
+
+    # 2. Match PyAudio Devices to Card Indices
+    t1_pa_index = None
+    t2_pa_index = None
+    fallback_devices = []
+
+    count = p.get_device_count()
+    for i in range(count):
         info = p.get_device_info_by_index(i)
         name = info.get('name')
-        # Filter for USB Audio Devices
+        
+        # Collect USB devices for fallback
         if "USB Audio" in name or "PnP Sound Device" in name or "C-Media" in name:
-            print(f"Found Audio Device [{i}]: {name}")
-            audio_devices.append(i)
-    
+            fallback_devices.append(i)
+            print(f"Found USB Audio [{i}]: {name}")
+
+            # Check for specific card association
+            # PyAudio name usually contains "hw:X,Y" where X is card index
+            if card_idx_t1 is not None and f"hw:{card_idx_t1}," in name:
+                print(f" -> MATCHED T1 to Device {i}")
+                t1_pa_index = i
+            
+            if card_idx_t2 is not None and f"hw:{card_idx_t2}," in name:
+                print(f" -> MATCHED T2 to Device {i}")
+                t2_pa_index = i
+
     p.terminate()
     
-    # --- T1 ---
-    if len(audio_devices) >= 1:
-        idx = audio_devices[0] # Take first available
-        print(f"T1 Using USB Audio Device (Index {idx})")
+    # --- T1 Assignment ---
+    if t1_pa_index is not None:
+         print(f"T1 Assigned to Named Card 'T1' (Device {t1_pa_index})")
+         t1_channel = AudioChannel("T1", "left", device_index=t1_pa_index)
+    elif len(fallback_devices) >= 1:
+        idx = fallback_devices[0]
+        print(f"WARNING: Card 'T1' not found. Fallback to Device {idx}")
         t1_channel = AudioChannel("T1", "left", device_index=idx)
     else:
-        print("T1 Using Default Audio (Left Channel Split)")
+        print("T1 Using Default Audio")
         t1_channel = AudioChannel("T1", "left")
 
-    # --- T2 ---
-    if len(audio_devices) >= 2:
-        idx = audio_devices[1] # Take second available
-        print(f"T2 Using USB Audio Device (Index {idx})")
+    # --- T2 Assignment ---
+    if t2_pa_index is not None:
+         print(f"T2 Assigned to Named Card 'T2' (Device {t2_pa_index})")
+         t2_channel = AudioChannel("T2", "right", device_index=t2_pa_index)
+    elif len(fallback_devices) >= 2:
+        idx = fallback_devices[1]
+        print(f"WARNING: Card 'T2' not found. Fallback to Device {idx}")
         t2_channel = AudioChannel("T2", "right", device_index=idx)
     else:
-        print("T2 Using Default Audio (Right Channel Split)")
+        print("T2 Using Default Audio")
         t2_channel = AudioChannel("T2", "right")
 
     device_map = {
