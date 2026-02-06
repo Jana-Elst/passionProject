@@ -530,8 +530,13 @@ class DualSineWaveGenerator:
         self.phase1 = 0.0
         self.phase2 = 0.0
         self.running = True
+
+    @property
+    def frequency(self):
+        return f"{self.freq1}+{self.freq2}"
         
     def getnchannels(self): return 1
+
     
     def readframes(self, n_frames: int) -> bytes:
         if not self.running: return b""
@@ -1130,7 +1135,7 @@ class ConnectedState(State):
         
         total_s = d_s1 + d_s2
         total_r = d_r1 + d_r2
-        base_pause = 1.5
+        base_pause = 0.5
         
         # Calculate padding pauses to ensure alignment
         pause_sender = base_pause + max(0, total_r - total_s)
