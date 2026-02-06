@@ -74,7 +74,7 @@ DEVICE_SAMPLE_RATE = 48000
 CHUNK_SIZE = 2048
 
 # Timers
-TIME_TILL_VOICEMAIL = 15.0
+TIME_TILL_VOICEMAIL = 60.0
 
 #--- Tone Definitions (Type, Freq, Duration, [ModFreq, ModIdx]) ---
 TONE_DIAL            = ("TONE", 425, 10.0) 
@@ -912,9 +912,9 @@ class RingingState(State):
         self.context.sender.play_async(files)
 
         # Arduino Ringing
-        # print(f"Sending {self.context.receiver.name}_BELL_START")
-        # if self.context.main_serial:
-            # self.context.main_serial.write(f"{self.context.receiver.name}_BELL_START\n".encode('utf-8'))
+        print(f"Sending {self.context.receiver.name}_BELL_START")
+        if self.context.main_serial:
+            self.context.main_serial.write(f"{self.context.receiver.name}_BELL_START\n".encode('utf-8'))
 
         # Voicemail Timer
         self.context.start_timer("voicemail_timeout", TIME_TILL_VOICEMAIL, self.trigger_voicemail)
