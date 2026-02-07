@@ -1,8 +1,8 @@
 ---
-title: '#27 Making the housing'
+title: '#28 Scripts, questions and AI voices'
 description: |
-    I can call through my house!
-pubDate: 'Feb 02 2026'
-heroImage: ../../assets/pictures/20260202-header.png
+    xxx
+pubDate: 'Feb 04 2026'
+heroImage: ../../assets/pictures/20260204-header.png
 ---
 

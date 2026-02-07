@@ -1,8 +1,8 @@
 ---
-title: '#27 Making the housing'
+title: '#30 Debugging till the end'
 description: |
-    I can call through my house!
-pubDate: 'Feb 02 2026'
-heroImage: ../../assets/pictures/20260202-header.png
+    When you think you're done, you're not done yet.
+pubDate: 'Feb 06 2026'
+heroImage: ../../assets/pictures/20260206-header.png
 ---
 
