@@ -20,7 +20,7 @@ I built a custom enclosure to house all the wires and components. On the outside
 ## A custom extension cable
 To make the system useful, the phones need to be far apart. I built a custom extension cable to bridge the distance between rooms.
 
-Halfway through the process, I had a realization: I was essentially just building a standard extension cord. Would the project work with a normal, mega-long extension cable? Probably. But I didn't tested that out yet. But I don't see any reason why it shouldn't work.
+Halfway through the process, I had a realization: I was essentially just building a standard extension cord. Would the project work with a normal, mega-long extension cable? Probably. But I haven't tested that out yet. However, I don't see any reason why it shouldn't work.
 
 <div class="image-center">
 

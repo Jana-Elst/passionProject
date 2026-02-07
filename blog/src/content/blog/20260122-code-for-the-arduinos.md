@@ -1,5 +1,5 @@
 ---
-title: '#17 coding the arduino(s)'
+title: '#17 Coding the Arduino(s)'
 description: |
     T1_OFFH
     T1_ONH
@@ -41,7 +41,7 @@ links:
 ---
 Yesterday, I successfully made my 9V DC circuit and ran some basic tests using old Arduino code. Today’s goal was more ambitious: writing the full production code to track the phone's various states and prepare the data to be sent to the pi via the Serial Monitor.
 
-I hit a brief moment of panic when the hook detection and dialing weren't registering at all. I worried I did something wrong with the circuit, but the fix was actually quite simple. First, I realized I needed to use analog pins instead of digital ones to get a more granular reading of the voltage  and spikes. Second, I had moved my measurement points from the positive to the negative side of the circuit, which inverted my logic. Now, when the phone is on-hook, the value reads near 0 instead of 900. After accounting for these hardware shifts in the code, everything worked perfectly.
+I hit a brief moment of panic when the hook detection and dialing weren't registering at all. I worried I did something wrong with the circuit, but the fix was actually quite simple. First, I realized I needed to use analog pins instead of digital ones to get a more granular reading of the voltage and spikes. Second, I had moved my measurement points from the positive to the negative side of the circuit, which inverted my logic. Now, when the phone is on-hook, the value reads near 0 instead of 900. After accounting for these hardware shifts in the code, everything worked perfectly.
 
 ## Functional Requirements
 The Arduino code is designed to handle three main tasks:
@@ -156,4 +156,4 @@ void processLine(int value, int phoneID) {
 ````
 
 
-So at the end of the day, I could manage the whole state of the both phones. And all the serial communication was prepared to be sent to the pi.
+So at the end of the day, I could manage the whole state of both phones. And all the serial communication was prepared to be sent to the Pi.

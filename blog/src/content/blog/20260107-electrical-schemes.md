@@ -26,13 +26,13 @@ A simulation where an Arduino feeds different sounds into my two telephones.
 
 A simulation combining the audio circuit and the direct-talk circuit, regulated by a relay.
 
-I also tried to simulate the bells, but that failed for now. I’ll have to give that another shot another time!
+I also tried to simulate the bells, but that failed for now. I’ll have to give that another shot later!
 
 ## Sound loop, no connection between phones
 
 ![](../../assets/notes/20260107-no-connection-between-phones.png)
 
-This circuit consists of an Arduino, the telephone (represented as a resistor of 0.3kΩ), a capacitor, and 2 resistors (one of 330𝛺 and one of 1k𝛺). The 1k𝛺 resistor is used to limit the current to the Arduino, and the 330𝛺 resistor is used to set the volume. Picking a heavier resistor will result in a lower volume.
+This circuit consists of an Arduino, the telephone (represented as a resistor of 0.3kΩ), a capacitor, and 2 resistors (one of 330𝛺 and one of 1k𝛺). The 1k𝛺 resistor is used to limit the current to the Arduino, and the 330𝛺 resistor is used to set the volume. Picking a higher value resistor will result in a lower volume.
 The capacitor acts like a sort of wall. It blocks DC current but allows AC current (which creates the sound) to pass.
 
 <a href="https://www.tinkercad.com/things/2BNsrL1ljib-sound-loops-arduino-no-connection-between-phones" target="_blank">Find the simulation here -></a>

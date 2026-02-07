@@ -59,7 +59,7 @@ I switched to sending data in chunks. Instead of transmitting single bytes, I fl
 
 After further calibration and experimentation, I realized that even though the Arduino was sampling at 8000Hz, the USB serial overhead was significantly slowing it down.
 
-By calibrationg everything right I got something where you could here my voice in the background.
+By calibrating everything right I got something where you could hear my voice in the background.
 
 <audio controls src="/passionProject/sound/20260124-sound-with-noise.wav"></audio>
 
