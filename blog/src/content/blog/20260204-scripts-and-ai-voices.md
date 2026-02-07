@@ -33,7 +33,7 @@ After a while, I had this:
 This wouldn't be good enough to deliver to someone else, but since I'm working alone and most of it is already structured in my head, it was good enough for me.
 
 ## Step 2: Finding the right open questions
-Since I have my flows, I really needed to start thinking about the questions. My whole concept stands or falls with the right open questions (staat of valt met). I looked online for inspiration, wrote down 30 nice questions, and asked Gemini to structure them into categories. After selecting and narrowing them down, I had 10 questions left, each connected to a different theme:
+Since I have my flows, I really needed to start thinking about the questions. My whole concept stands or falls with the right open questions. I looked online for inspiration, wrote down 30 nice questions, and asked Gemini to structure them into categories. After selecting and narrowing them down, I had 10 questions left, each connected to a different theme:
 
 1. **Origins**: What is your earliest childhood memory?
 2. **Surplus**: If currency were no object, how would you spend your life?
@@ -59,6 +59,7 @@ Avoid all modern 'assistant' cheerfulness.
 Speak clearly and a little fast, with distinct pauses.
 The delivery must be flat and monotone,
 sounding like a pre-recorded system message rather than a live person.
-Step 4: Organizing sound files and coding
-The last step of the day was organizing all the sound files. I decided to work with numbers and a variable—sender if the sound is linked to the sender’s phone, or receiver for the other—instead of using full descriptions. This makes sure the sounds are organized exactly like the flows in my code.
 ```
+
+## Step 4: Organizing sound files and coding
+The last step of the day was organizing all the sound files. I decided to work with numbers and a variable—sender if the sound is linked to the sender’s phone, or receiver for the other—instead of using full descriptions. This makes sure the sounds are organized exactly like the flows in my code.

@@ -26,6 +26,6 @@ Rotary phones send pulses, and my Arduino converts those into digits. However, a
 **Action:** Once two digits are collected, the Pi looks for a corresponding .wav file (e.g., sender-05.wav) to play.
 
 ## Multi-threaded Audio Streaming
-The most complex part of today was streaming audio. Since the Arduino’s memory is tiny, I can’t send the whole file at once. Instead, I’m sending the audio in 64-byte chunks. But this one I already tested before in a litle demo.
+The most complex part of today was streaming audio. Since the Arduino’s memory is tiny, I can’t send the whole file at once. Instead, I’m sending the audio in 64-byte chunks. But this one I already tested before in a little demo.
 
 To prevent the audio from blocking the rest of the script (like listening for the user to hang up), I used the threading library. Each audio stream runs in its own background thread. If the user hangs up mid-song, the Pi catches the TX_ONH signal and immediately kills the thread, stopping the music.

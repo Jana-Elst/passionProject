@@ -1,7 +1,7 @@
 ---
 title: '#12 A new simulation'
 description: |
-    Three arduino's, one raspberry pi and a lot of wires.
+    Three Arduinos, one Raspberry Pi and a lot of wires.
     It looks a little bit overkill, but it works.
 pubDate: 'Jan 16 2026'
 heroImage: ../../assets/notes/20260116-header.png

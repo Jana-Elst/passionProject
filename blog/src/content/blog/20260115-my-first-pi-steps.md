@@ -2,7 +2,7 @@
 title: '#11 My first Pi steps'
 description: |
     How is this crazy little device working?
-    Can I just replace my arduino with a raspberry pi?
+    Can I just replace my Arduino with a Raspberry Pi?
 pubDate: 'Jan 15 2026'
 heroImage: '../../assets/pictures/20260115-header.webp'
 sources:
@@ -36,6 +36,6 @@ While this would probably be the best solution, I don’t have any sound cards a
 ### 3. Using a DAC
 After looking into it further, I realized where the real problem lies. A Raspberry Pi sends out digital signals, but the vintage phone needs to receive an analog signal. To bridge this gap, I need something that can convert digital data into an analog waveform.
 
-While there are specialized "shields" (HATs) to handle this, it’s actually a task an Arduino can perform. And since I have 2 Arduino Nano IoTs, I started wondering: can I use them as my converters?
+While there are specialized "shields" (HATs) to handle this, it’s actually a task an Arduino can perform. And since I have two Arduino Nano IoTs, I started wondering: can I use them as my converters?
 
 It turns out they can, as they have pins capable of simulating analog outputs. Is this the easiest solution? Definitely not. But since I already have the parts, it’s definitely the cheapest!
