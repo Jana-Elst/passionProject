@@ -16,11 +16,17 @@ links:
 Today I spended some time to find the right cable to connect my aux screw pin with my sound card. Because twe aux screws where not fitting together in the sound card. But after buying a male to female aux cable, I faced exactly the same problem then before...
 At the end by removing some rubber, I was able to connect both the in and out at the same moment!
 
+<div class="image-center">
+
+![](../../assets/pictures/20260128-soundcard-struggles.png)
+
+</div>
+
 # Let's try to ring the bell
 My whole DC circuit is working, my whole code for this part is working. So the only thing that I proposed to do was to connect the AC circuit togheter with the DC circuit.
 After adding the double-sided relays and some new wiring and ... staring at what I did wrong (I forgot to connect the GND). My NC circuit, where the DC is flowing trough worked again!
 
-And also by opening the relays, by phone started to ring!
+And also by opening the relays, my phone started to ring!
 
 And then suddenly, my transformator burned...
 

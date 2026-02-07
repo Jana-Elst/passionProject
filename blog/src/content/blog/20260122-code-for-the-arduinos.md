@@ -1,7 +1,34 @@
 ---
 title: '#17 coding the arduino(s)'
 description: |
-    ???
+    T1_OFFH
+    T1_ONH
+    T1_N0
+    T1_N1
+    T1_N2
+    T1_N3
+    T1_N4
+    T1_N5
+    T1_N6
+    T1_N7
+    T1_N8
+    T1_N9
+    T2_OFFH
+    T2_ONH
+    T2_N0
+    T2_N1
+    T2_N2
+    T2_N3
+    T2_N4
+    T2_N5
+    T2_N6
+    T2_N7
+    T2_N8
+    T2_N9
+    R1_OPEN
+    R1_CLOSE
+    R2_OPEN
+    R2_CLOSE
 pubDate: 'Jan 22 2026'
 heroImage: ../../assets/pictures/20260122-header.webp
 sources:

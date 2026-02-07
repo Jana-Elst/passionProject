@@ -3,7 +3,7 @@ title: '#27 Making the housing'
 description: |
     I can call through my house!
 pubDate: 'Feb 02 2026'
-heroImage: ../../assets/pictures/20260201-header.webp
+heroImage: ../../assets/pictures/20260202-header.png
 ---
 
 With the circuit fully soldered and (thankfully) no longer on fire, it was time to give the project a proper home.
@@ -11,10 +11,22 @@ With the circuit fully soldered and (thankfully) no longer on fire, it was time 
 ## The Box
 I built a custom enclosure to house all the wires and components. On the outside, I added three power inlets: one for the 12V DC logic and two for the AC circuits. Most importantly, I mounted two normal sockets on the side, allowing the vintage phones to be plugged in and swapped out easily.
 
-## a custom extension cable
+<div class="image-center">
+
+![](../../assets/pictures/20260202-housing.png)
+
+</div>
+
+## A custom extension cable
 To make the system useful, the phones need to be far apart. I built a custom extension cable to bridge the distance between rooms.
 
 Halfway through the process, I had a realization: I was essentially just building a standard extension cord. Would the project work with a normal, mega-long extension cable? Probably. But I didn't tested that out yet. But I don't see any reason why it shouldn't work.
+
+<div class="image-center">
+
+![](../../assets/pictures/20260202-cable.png)
+
+</div>
 
 ## Testing!
 It was time for the ultimate test. I placed Phone A in my bedroom and carried Phone B through the entire house to see if the signal would hold up. 
