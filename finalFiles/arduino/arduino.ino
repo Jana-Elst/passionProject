@@ -29,13 +29,14 @@ const String DeviceName = "MAIN";
 struct PhoneConfig {
   int pickupThreshold;
   int hangupThreshold;
-  int timeout;
+  int digitTimeout;
+  int hangupValidationTime;
 };
 
 const PhoneConfig phoneConfigs[2] = {
-    // pickupThreshold (High/Rising), hangupThreshold (Low/Falling), timeout(ms)
-    {45, 15, 600}, // T1 (Off-hook: ~60-65, Bottom: ~10)
-    {60, 15, 600}  // T2 (Off-hook: ~80-90, Connected: ~35)
+    // pickup, hangup, digitTimeout(ms), hangupValidation(ms)
+    {45, 20, 600, 1500}, // T1
+    {60, 20, 600, 1500}  // T2
 };
 
 //--- STATE & VARIABLES
@@ -116,9 +117,9 @@ void loop() {
   int valueT1 = analogRead(measurePinT1);
   int valueT2 = analogRead(measurePinT2);
 
-  Serial.print(valueT1);
-  Serial.print(" | ");
-  Serial.println(valueT2);
+  // Serial.print(valueT1);
+  // Serial.print(" | ");
+  // Serial.println(valueT2);
 
   //--- 3. Get all information from the lines
   // On/off hook state & dialed digits
@@ -185,19 +186,25 @@ void processLine(int value, int phoneID) {
     }
 
     // Is the pulse a Digit or a Hang-up?
-    if (millis() - state.lastPulseTime > config.timeout) {
-      if (state.inPulse) // inPulse means the voltage is low -> doesn't go back
-                         // up? => HANGUP
-      {
+    // Is the pulse a Digit or a Hang-up?
+    unsigned long duration = millis() - state.lastPulseTime;
+
+    if (state.inPulse) {
+      // Voltage is LOW (Pulse or Hangup)
+      // If it stays LOW longer than validation time -> HANGUP
+      if (duration > config.hangupValidationTime) {
         state.isOffHook = false;
         state.inPulse = false;
         state.pulseCount = 0;
         Serial.print("T");
         Serial.print(phoneID + 1);
         Serial.println("_ONH");
-      } else if (state.pulseCount >
-                 0) // Line stayed high & pulseCount > 0 -> DIGIT FINISHED
-      {
+      }
+    } else {
+      // Voltage is HIGH (Inter-digit gap or Idle)
+      // If stays HIGH longer than digitTimeout AND we have pulses -> DIGIT
+      // FINISHED
+      if (state.pulseCount > 0 && duration > config.digitTimeout) {
         int digit = (state.pulseCount == 10) ? 0 : state.pulseCount;
         Serial.print("T");
         Serial.print(phoneID + 1);
