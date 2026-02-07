@@ -1191,7 +1191,36 @@ class ConversationState(State):
         self.context.receiver.stop_audio()
 
     def on_onhook(self, phone):
-        return PostCallWaitState(self.context)
+        # Debounce Hangup: Wait 1.0s to confirm it's not a glitch
+        if hasattr(self, "pending_hangup") and self.pending_hangup:
+             return None # Timer already running
+             
+        print(f"[Conversation] Potential hangup by {phone.name}... Debouncing 1.0s")
+        self.pending_hangup = phone
+        self.context.start_timer("conversation_hangup", 1.0, self.confirm_hangup)
+        return None
+
+    def confirm_hangup(self):
+        if not hasattr(self, "pending_hangup") or not self.pending_hangup: return
+
+        phone = self.pending_hangup
+        # Verify if it is STILL on hook
+        if phone.state == PhoneState.ONHOOK:
+            print(f"[Conversation] Hangup Confirmed for {phone.name}")
+            self.context.sender.stop_audio()
+            self.context.receiver.stop_audio()
+            self.context.transition_to(PostCallWaitState(self.context))
+        else:
+            print(f"[Conversation] Hangup Aborted (Glitch) for {phone.name}")
+            self.pending_hangup = None
+            
+    def on_offhook(self, phone):
+        # If the pending phone comes back, cancel the hangup
+        if hasattr(self, "pending_hangup") and self.pending_hangup == phone:
+            print(f"[Conversation] Hangup Cancelled (Re-offhook) for {phone.name}")
+            self.context.stop_timer("conversation_hangup")
+            self.pending_hangup = None
+        return None
 
 class PostCallWaitState(State):
     def on_enter(self):
