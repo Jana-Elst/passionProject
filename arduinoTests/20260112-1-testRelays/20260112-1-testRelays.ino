@@ -10,8 +10,8 @@ void setup() {
 
   
   // Start with the relay OFF (NC connected to C)
-  digitalWrite(RELAY_PIN1, LOW);
-    digitalWrite(RELAY_PIN2, LOW);
+  digitalWrite(RELAY_PIN1, HIGH);
+    digitalWrite(RELAY_PIN2, HIGH);
 
   
   // Optional: Start Serial for debugging

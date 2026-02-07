@@ -3,7 +3,7 @@ title: '#6 Components, Components, Components'
 description: |
   Creating a shopping list for the electro shop isn't that easy.
 pubDate: 'Jan 8 2026'
-heroImage: '../../assets/pictures/20260108-header.png'
+heroImage: '../../assets/pictures/20260108-header.webp'
 sources:
 
 gemini: 
@@ -23,7 +23,7 @@ I want to power my project from a standard wall socket (230V AC). To step down t
 
 <div class="image-center">
 
-![](../../assets/pictures/20260108-transfo.png)
+![](../../assets/pictures/20260108-transfo.webp)
 
 </div>
 
