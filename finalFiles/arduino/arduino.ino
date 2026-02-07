@@ -34,7 +34,7 @@ struct PhoneConfig {
 
 const PhoneConfig phoneConfigs[2] = {
     // pickupThreshold (High/Rising), hangupThreshold (Low/Falling), timeout(ms)
-    {45, 20, 600}, // T1 (Off-hook: ~60-65, Bottom: ~10)
+    {45, 15, 600}, // T1 (Off-hook: ~60-65, Bottom: ~10)
     {60, 15, 600}  // T2 (Off-hook: ~80-90, Connected: ~35)
 };
 
@@ -54,7 +54,7 @@ PhoneState phoneStates[2] = {
 };
 
 const int RelayStabilityPause =
-    1000; // Wait after connection before allowing break (ms)
+    2500; // Wait after connection before allowing break (ms)
 unsigned long lastRelayChangeTime = 0;
 
 //------------------------ SETUP ------------------------//
@@ -116,9 +116,9 @@ void loop() {
   int valueT1 = analogRead(measurePinT1);
   int valueT2 = analogRead(measurePinT2);
 
-  // Serial.print(valueT1);
-  // Serial.print(" | ");
-  // Serial.println(valueT2);
+  Serial.print(valueT1);
+  Serial.print(" | ");
+  Serial.println(valueT2);
 
   //--- 3. Get all information from the lines
   // On/off hook state & dialed digits
