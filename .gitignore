@@ -1,5 +1,11 @@
 # build output
 dist/
+
+# virtual environment
+venv/
+
+__pycache__
+
 # generated types
 .astro/
 
