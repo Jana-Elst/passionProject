@@ -1208,9 +1208,9 @@ class PostCallWaitState(State):
              self.context.transition_to(IdleState(self.context))
              return
 
-        # Start timer for the remaining phone to get a busy signal
-        self.context.t1.play_async(AUDIO_CONFIG["busy_tone"])
-        self.context.t2.play_async(AUDIO_CONFIG["busy_tone"])
+        # Play busy loop on the phone that is still off-hook
+        if self.phone_still_offhook:
+            self.phone_still_offhook.play_async(AUDIO_CONFIG["busy_loop"])
         
         print("[PostCallWait] Starting 30s timer...")
         self.context.start_timer("post_call_timeout", 30.0, self.trigger_interruption)

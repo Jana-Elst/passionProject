@@ -57,6 +57,7 @@ PhoneState phoneStates[2] = {
 const int RelayStabilityPause =
     2500; // Wait after connection before allowing break (ms)
 unsigned long lastRelayChangeTime = 0;
+bool isRelayOpen = false; // Track relay state (R1)
 
 //------------------------ SETUP ------------------------//
 void setup() {
@@ -161,6 +162,27 @@ void processLine(int value, int phoneID) {
   const PhoneConfig &config = phoneConfigs[phoneID];
   PhoneState &state = phoneStates[phoneID];
 
+  // AUTO-DISCONNECT Logic:
+  // If Relay is OPEN (Phones connected) and voltage drops < 5 (Total connection
+  // loss/Hangup) We IMMEDIATELY close the relay to isolate the lines and verify
+  // the state.
+  if (isRelayOpen && value < 5) {
+    digitalWrite(R1_PIN, LOW);      // Force Disconnect
+    isRelayOpen = false;            // Update State
+    lastRelayChangeTime = millis(); // Trigger Stability Pause (2.5s)
+
+    // CRITICAL FIX: Reset pulse detection state.
+    // We are changing the physical line; previous low-voltage "pulses" are
+    // invalid. If we don't reset, the 2.5s pause will make any existing
+    // 'inPulse' look like a massive hangup.
+    phoneStates[0].inPulse = false;
+    phoneStates[0].pulseCount = 0;
+    phoneStates[1].inPulse = false;
+    phoneStates[1].pulseCount = 0;
+
+    return; // Stop processing this cycle
+  }
+
   // Off-Hook Detection
   if (!state.isOffHook && value > config.pickupThreshold) {
     state.isOffHook = true;
@@ -185,7 +207,6 @@ void processLine(int value, int phoneID) {
       state.lastPulseTime = millis();
     }
 
-    // Is the pulse a Digit or a Hang-up?
     // Is the pulse a Digit or a Hang-up?
     unsigned long duration = millis() - state.lastPulseTime;
 
@@ -226,11 +247,19 @@ void checkSerialCommands() {
     if (cmd == "R1_OPEN") {
       digitalWrite(R1_PIN, HIGH);
       lastRelayChangeTime = millis();
+      isRelayOpen = true;
     }
     // "R1_CLOSE" = Close the channel / Disconnect (Relay LOW)
     else if (cmd == "R1_CLOSE") {
       digitalWrite(R1_PIN, LOW);
       lastRelayChangeTime = millis();
+      isRelayOpen = false;
+
+      // Reset pulse states on manual close too
+      phoneStates[0].inPulse = false;
+      phoneStates[0].pulseCount = 0;
+      phoneStates[1].inPulse = false;
+      phoneStates[1].pulseCount = 0;
     }
 
     //--- RINGING
