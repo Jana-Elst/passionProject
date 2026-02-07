@@ -38,7 +38,11 @@ Here is what the main parts do:
 - **The Voltage Divider**: Two resistors that bias the signal to 1.65V. This allows the voice signal to oscillate up and down without hitting the "floor" (0V) or the "ceiling" (3.3V) of the Arduino's input range.
 - **The Zener Diode**: A bodyguard. If a high-voltage spike surges through, this diode clamps it before it fries the Arduino.
 
-INSERT THE AUDIO LINES
+<div class="image-center">
+
+![](../../assets/notes/20260124-recording-circuit-1.png)
+
+</div>
 
 ## The Code
 I quickly realized that the Arduino is actually quite slow when it comes to sound.
@@ -46,26 +50,32 @@ I quickly realized that the Arduino is actually quite slow when it comes to soun
 ### 1. 1 sec of high-pitched sound
 My first attempt resulted in just 1 second of high-pitched screeching. I tried streamlining every byte the moment it was ready, but the data bottlenecked immediately.
 
-[INSERT SOUND CLIP: High Pitch]
+<audio controls src="/passionProject/sound/20260124-high-pitch-sound.wav"></audio>
 
 Of course! If I couldn't stream music byte-by-byte from the Pi to the Arduino, why did I expect the reverse to work? I needed to find a balance: avoiding buffer overflows on the Arduino while ensuring the Pi wasn't overwhelmed by a flood of data packets.
 
 ### 2. Slow-Motion
 I switched to sending data in chunks. Instead of transmitting single bytes, I flushed the entire serial buffer at once. I saw some progress, but my timing was off: a 10-second recording stretched into a minute of playback.
 
-INSERT SOUND
-
 After further calibration and experimentation, I realized that even though the Arduino was sampling at 8000Hz, the USB serial overhead was significantly slowing it down.
 
 By calibrationg everything right I got something where you could here my voice in the background.
 
-INSERT SOUND
+<audio controls src="/passionProject/sound/20260124-sound-with-noise.wav"></audio>
 
 Do you hear the noise, too? I have no idea where it came from—likely interference from a component or internal noise from the Arduino itself.
 
 I tried everything to eliminate it: disabling Wi-Fi on the Arduino, rewiring the breadboard... eventually, I messed up the wiring so badly that all I got was a static sound.
 
-INSERT DRAWINGS
+<div class="image-grid">
+
+![](../../assets/notes/20260124-circuit-drawing-1.png)
+![](../../assets/notes/20260124-circuit-drawing-2.png)
+![](../../assets/notes/20260124-circuit-drawing-3.png)
+![](../../assets/notes/20260124-circuit-drawing-4.png)
+![](../../assets/notes/20260124-circuit-drawing-5.png)
+
+</div>
 
 ## Conclusion
 I’ve learned my lesson. The Arduino Nano IoT is excellent for simple control tasks, but it lacks the fidelity required for high-quality audio recording.

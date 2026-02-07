@@ -3,7 +3,7 @@ title: '#24 Ringing the bell 2.0'
 description: |
     Today i burned my transformator...
 pubDate: 'Jan 29 2026'
-heroImage: ../../assets/pictures/20260129-header.png
+heroImage: ../../assets/pictures/20260129-header.webp
 sources:
 
 gemini: 

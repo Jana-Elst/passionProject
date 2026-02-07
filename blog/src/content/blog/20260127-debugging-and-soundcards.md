@@ -4,7 +4,7 @@ description: |
     A got a present!
     My soundcards arrived!
 pubDate: 'Jan 27 2026'
-heroImage: ../../assets/pictures/20260127-header.png
+heroImage: ../../assets/pictures/20260127-header.webp
 ---
 
 Yesterday, the logic was mostly finished, but as every developer knows, the last 10% of the work takes 90% of the time. I spent the morning squashing the final bugs in the logic loop. But the real highlight of the day? 
@@ -27,8 +27,8 @@ I discovered that my new soundcards are a bit of a diva, they refuse to play low
 
 Instead of re-converting all my files, I added an Upsampling Factor to the engine. If the card rejects the 8k signal, the code automatically duplicates every byte 6 times to hit that 48k target (48000 / 8000 = 6).
 
-## 3. Real Tones for Real Phones
-Since I'm moving to real hardware, beep-beep wasn't good enough anymore. I've started sourcing authentic dial tones, busy signals, and ringbacks from all over the world (shoutout to [TonsOfTONZ](https://www.youtube.com/@TonsOfTONZ/videos)).
+## 3. Authentic tones
+Since I'm moving to real hardware, beep-beep wasn't good enough anymore. I've started sourcing authentic dial tones, busy signals, and ringbacks from all over the world (shoutout to <a href="https://www.youtube.com/@TonsOfTONZ/videos" target="_blank">TonsOfTONZ</a>).
 
 Implenting those sounds are final touches and will do it if I created my whole user flow.
 

@@ -62,19 +62,35 @@ This installation aims to break the "smartphone bubble" by using obsolete techno
 ### Week 3 (19 - 25 jan)
 **Write the software**
 - calculate the voltages, voltages spikes, and current in the whole circuit
-- write the whole arduino logic (Pro micro)
-- write the python code
-- add the dial to the circuit
-- detect on/off hook
+- ~~write the whole arduino logic (Pro micro)~~
+- ~~write the basic python code~~
+- ~~add the dial to the circuit~~
+- ~~detect on/off hook~~
 - connect the bells
 - write code to record a voice mail
-- find a workflow between the pi, and the code
+- ~~find a workflow between the pi, and the code~~
 
 ### Week 4 (26 - 1 feb)
 **Scenografie + test the installation**
-- Solder everything together
+- ~~wirte the whole python logic (Monday)~~
+- ~~debug the python logic (Tuesday)~~
+  - ~~test if its working on the Pi~~
+  - create detailed scripts
+  - ~~send instructions to the arduino to open & close the relais at the right moments~~
+- ~~add relais for the bell to the circuit~~
+    - ~~write extra arduino code~~
+-~~change sound system to the usbcards (instead of the arduino) (Wednesday)~~
+
 - Make a nice scenografie
 - Test the installation
+
+- ~~Solder everything together~~
+
+- add extra's
+  - setup system
+    - add option to record new questions
+    - language?
+    - ...
 
 ### Week 5 (2 - 8 feb)
 **Create presentation + final touches**
