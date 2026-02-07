@@ -1191,36 +1191,7 @@ class ConversationState(State):
         self.context.receiver.stop_audio()
 
     def on_onhook(self, phone):
-        # Debounce Hangup: Wait 1.0s to confirm it's not a glitch
-        if hasattr(self, "pending_hangup") and self.pending_hangup:
-             return None # Timer already running
-             
-        print(f"[Conversation] Potential hangup by {phone.name}... Debouncing 1.0s")
-        self.pending_hangup = phone
-        self.context.start_timer("conversation_hangup", 1.0, self.confirm_hangup)
-        return None
-
-    def confirm_hangup(self):
-        if not hasattr(self, "pending_hangup") or not self.pending_hangup: return
-
-        phone = self.pending_hangup
-        # Verify if it is STILL on hook
-        if phone.state == PhoneState.ONHOOK:
-            print(f"[Conversation] Hangup Confirmed for {phone.name}")
-            self.context.sender.stop_audio()
-            self.context.receiver.stop_audio()
-            self.context.transition_to(PostCallWaitState(self.context))
-        else:
-            print(f"[Conversation] Hangup Aborted (Glitch) for {phone.name}")
-            self.pending_hangup = None
-            
-    def on_offhook(self, phone):
-        # If the pending phone comes back, cancel the hangup
-        if hasattr(self, "pending_hangup") and self.pending_hangup == phone:
-            print(f"[Conversation] Hangup Cancelled (Re-offhook) for {phone.name}")
-            self.context.stop_timer("conversation_hangup")
-            self.pending_hangup = None
-        return None
+        return PostCallWaitState(self.context)
 
 class PostCallWaitState(State):
     def on_enter(self):
@@ -1236,16 +1207,11 @@ class PostCallWaitState(State):
         if self.phone_still_offhook:
             self.phone_still_offhook.play_async([AUDIO_CONFIG["busy_loop"]])
             
+        print("[PostCallWait] Starting 30s timer...")
         self.context.start_timer("post_call_timeout", 30.0, self.trigger_interruption)
 
-        # Debounce ONHOOK events for 2 seconds to ignore transient relay noise
-        self.ignore_hook_events = True
-        self.context.start_timer("debounce_hooks", 2.0, self.enable_hooks)
-
-    def enable_hooks(self):
-        self.ignore_hook_events = False
-
     def trigger_interruption(self):
+        print("[PostCallWait] Timer fired! Transitioning to DialingState.")
         if self.phone_still_offhook:
             self.context.sender = self.phone_still_offhook
             self.context.receiver = self.context.get_other_phone(self.phone_still_offhook)
@@ -1264,15 +1230,6 @@ class PostCallWaitState(State):
         return None
 
     def on_onhook(self, phone):
-        # 1. Debounce Check
-        if getattr(self, "ignore_hook_events", False):
-            print(f"[PostCallWait] Ignoring transient ONHOOK from {phone.name} (Debounce)")
-            return None
-
-        # 2. Identity Check: Only go to Idle if the phone keeping the session alive hangs up
-        if self.phone_still_offhook and phone != self.phone_still_offhook:
-             return None
-             
         self.context.t1.stop_audio()
         self.context.t2.stop_audio()
         return IdleState(self.context)
