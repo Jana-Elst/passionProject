@@ -1,5 +1,5 @@
 ---
-title: '#20 The Bug That Wouldn\'t Sleep'
+title: "#20 The Bug That Wouldn't Sleep"
 description: |
     It's 2 AM. Phones are randomly disconnecting. 
     The installation is supposed to be ready tomorrow.
