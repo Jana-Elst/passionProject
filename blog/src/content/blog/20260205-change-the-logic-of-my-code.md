@@ -2,11 +2,11 @@
 title: '#29 Change the logic of my code'
 description: |
     How should I handle all the different cases?
-    I have again to main if-else structures...
+    I have to deal with if-else structures again...
 pubDate: 'Feb 05 2026'
 heroImage: ../../assets/pictures/20260205-header.png
 ---
-I had a basic code, but after making the different flows, I realized that there were so many cases I hadn't even thought of yet. I started to implement them, but after a day of (trying to) get them all working, my code and my brain became a total mess. Again, I was dealing with a lot of messy, nested if-else structures, the kind of "spaghetti code" that breaks the moment you touch it.
+I had basic code, but after making the different flows, I realized that there were so many cases I hadn't even thought of yet. I started to implement them, but after a day of (trying to) get them all working, my code and my brain became a total mess. Again, I was dealing with a lot of messy, nested if-else structures, the kind of "spaghetti code" that breaks the moment you touch it.
 
 What if someone hangs up during the intro? What if they dial a number while the other phone is already ringing? My code just couldn't handle that complexity.
 
@@ -23,7 +23,7 @@ And then, it was once again proven that taking a break works! I stepped away for
 Together with AI, I designed a whole new logic to handle all the different cases. Instead of just swapping between variables in a giant list, I started using Classes.
 
 This template:
-````
+```python
 class State(ABC):
     def __init__(self, context):
         self.context = context
@@ -55,9 +55,9 @@ class State(ABC):
             self.context.receiver.stop_audio()
             return RingingState(self.context, intro_file_key="interruption_receiver_hangup")
         return None
-````
+```
 In each state class, different actions can happen. Depending on whether it's an on_offhook or on_timeout, I can now easily define which state should follow. Writing new cases and handling interruptions became way easier!
 
-Instead of hunting through a giant list of "if" statements, I just tell the specific Class how to react to that event. It makes the code way more organized and "smarter." And writing new cases, became way more easy!
+Instead of hunting through a giant list of "if" statements, I just tell the specific Class how to react to that event. It makes the code way more organized and "smarter." And writing new cases became much easier!
 
 

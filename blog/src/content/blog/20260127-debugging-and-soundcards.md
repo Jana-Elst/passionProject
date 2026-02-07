@@ -1,7 +1,7 @@
 ---
 title: '#22 The Sound(cards) of Success'
 description: |
-    A got a present!
+    I got a present!
     My soundcards arrived!
 pubDate: 'Jan 27 2026'
 heroImage: ../../assets/pictures/20260127-header.webp
@@ -30,6 +30,6 @@ Instead of re-converting all my files, I added an Upsampling Factor to the engin
 ## 3. Authentic tones
 Since I'm moving to real hardware, beep-beep wasn't good enough anymore. I've started sourcing authentic dial tones, busy signals, and ringbacks from all over the world (shoutout to <a href="https://www.youtube.com/@TonsOfTONZ/videos" target="_blank">TonsOfTONZ</a>).
 
-Implenting those sounds are final touches and will do it if I created my whole user flow.
+Implementing those sounds are the final touches, and I will do it once I have created my whole user flow.
 
 Since today, the whole 9V DC talking and recording system is alive. Let's test the ringing system tomorrow!

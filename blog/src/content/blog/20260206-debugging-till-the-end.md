@@ -27,11 +27,8 @@ The very last step was making sure the project starts automatically. I created a
 I found a really helpful guide for this here: <a href="https://www.instructables.com/Raspberry-Pi-Launch-Python-script-on-startup/" target="_blank">Raspberry Pi: Launch Python script on startup.</a>
 
 ## My code is working, maybe, and that is it.
-Maybe my code is still a little mess, maybe it could be cleaner.
-But at least it works.
-
 Maybe my code is still a bit of a mess. Maybe it could be much cleaner, and the logic could be more elegant.
 
-But after five weeks of breeaking components, soldering, 2 AM debugging sessions, and wrestling with ghost signals, there is one thing that matters: It actually works!
+But after five weeks of breaking components, soldering, 2 AM debugging sessions, and wrestling with ghost signals, there is one thing that matters: It actually works!
 
 <iframe src="https://www.instagram.com/reel/DUX4XXeCKLb/embed" width="400" height="710" frameborder="0" scrolling="no" allowtransparency="true" style="margin: 0 auto; display: block; max-width: 100%; border: none; padding: 32px 0"></iframe>
