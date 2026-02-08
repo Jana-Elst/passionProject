@@ -1258,7 +1258,7 @@ def construct_voicemail_playlist(context):
     # [0-1] + topic + [2] + question + [3] + vm_file + [4] + question + [5-6]
     files = [parts[0], parts[1], parts[2], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), topic, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), parts[3], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), question, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), 
              parts[4], vm_playback_file, parts[5], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), question, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC),
-             parts[6], parts[7]]
+             parts[6], parts[7], parts[8]]
     return files
 
 
