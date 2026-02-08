@@ -75,7 +75,8 @@ DEVICE_SAMPLE_RATE = 48000
 CHUNK_SIZE = 2048
 
 # Timers
-TIME_TILL_VOICEMAIL = 15.0
+TIME_TILL_VOICEMAIL = 30.0
+TIMING_FIRST_GHOST_RING = 900.0
 PAUSE_AROUND_QUESTION_OR_TOPIC = 0.3
 
 #--- Tone Definitions (Type, Freq, Duration, [ModFreq, ModIdx]) ---
@@ -878,8 +879,12 @@ class IdleState(State):
              self.context.t2.play_async(AUDIO_CONFIG["dial_tone_loop"])
              
         # Start Random Ghost Ringing Timer
-        # 8 to 15 minutes = 480 to 900 seconds
-        delay = random.uniform(480, 900)
+        if getattr(self.context, "first_ghost_ring", True):
+            delay = TIMING_FIRST_GHOST_RING # 15 minutes
+            self.context.first_ghost_ring = False
+        else:
+            delay = random.uniform(480, 900)
+
         print(f"Ghost Ring scheduled in {delay:.1f}s")
         self.context.start_timer("ghost_ring_start", delay, self.trigger_ghost_ring)
 
@@ -930,10 +935,8 @@ class GhostRingingState(State):
             self.context.main_serial.write(f"{self.target_phone.name}_BELL_STOP\n".encode('utf-8'))
 
     def on_offhook(self, phone):
-        # If ANY phone is picked up, we stop ringing and go to Idle (which gives dial tone)
         print(f"Ghost Ring Interrupted by {phone.name}")
-        return IdleState(self.context)
-
+        return DialingState(self.context)
 
 #--- CONVERSATION STATES ------------------------#
 class DialingState(State):
@@ -1255,7 +1258,7 @@ def construct_voicemail_playlist(context):
     # [0-1] + topic + [2] + question + [3] + vm_file + [4] + question + [5-6]
     files = [parts[0], parts[1], parts[2], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), topic, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), parts[3], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), question, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), 
              parts[4], vm_playback_file, parts[5], ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC), question, ("PAUSE", PAUSE_AROUND_QUESTION_OR_TOPIC),
-             parts[6], parts[7]]
+             parts[6], parts[7], parts[8]]
     return files
 
 
@@ -1483,6 +1486,7 @@ class PhoneSystem:
         self.sender = None
         self.receiver = None
         self.question = None
+        self.first_ghost_ring = True
 
         # START THE STATE MACHINE
         self.state = IdleState(self) 
