@@ -930,9 +930,8 @@ class GhostRingingState(State):
             self.context.main_serial.write(f"{self.target_phone.name}_BELL_STOP\n".encode('utf-8'))
 
     def on_offhook(self, phone):
-        # If ANY phone is picked up, we stop ringing and go to Idle (which gives dial tone)
         print(f"Ghost Ring Interrupted by {phone.name}")
-        return IdleState(self.context)
+        return DialingState(self.context)
 
 
 #--- CONVERSATION STATES ------------------------#
