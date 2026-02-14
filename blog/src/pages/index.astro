@@ -23,7 +23,7 @@ const posts = (await getCollection("blog"))
 			grid-template-rows: 65vh;
 			align-items: center;
 		}
-		.hero__content{
+		.hero__content {
 			margin-bottom: 10vh;
 		}
 		.title {
@@ -53,6 +53,18 @@ const posts = (await getCollection("blog"))
 			justify-content: space-between;
 			align-items: baseline;
 		}
+
+		.blog {
+			margin-bottom: var(--space-xl);
+		}
+
+		.video {
+			display: block;
+			width: 60vw;
+			height: 60vh;
+			border: none;
+			margin: 0 auto;
+		}
 	</style>
 
 	<BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
@@ -81,6 +93,24 @@ const posts = (await getCollection("blog"))
 							/>
 						</div>
 						<BlogList posts={posts} />
+					</section>
+
+					<section class="showcase">
+						<div class="blog__header">
+							<h2>Showcase video</h2>
+						</div>
+						<iframe
+							class="video"
+							title="vimeo-player"
+							src="https://player.vimeo.com/video/1163033255?h=2556c022fc"
+							width="640"
+							height="360"
+							frameborder="0"
+							referrerpolicy="strict-origin-when-cross-origin"
+							allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media; web-share"
+							allowfullscreen
+						>
+						</iframe>
 					</section>
 				</div>
 			</div>
