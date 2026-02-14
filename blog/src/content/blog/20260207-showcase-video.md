@@ -1,7 +1,7 @@
 ---
 title: '#31 Showcase video'
 description: |
-    Here is a short video of the project in action.
+    RINNNGGGG, the showcase video is waiting for you.
 pubDate: 'Feb 07 2026'
 heroImage: ../../assets/20260207-header.png
 ---
