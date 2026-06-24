@@ -879,17 +879,17 @@ class IdleState(State):
              self.context.t2.play_async(AUDIO_CONFIG["dial_tone_loop"])
              
         # Start Random Ghost Ringing Timer
-        if getattr(self.context, "first_ghost_ring", True):
-            delay = TIMING_FIRST_GHOST_RING # 15 minutes
-            self.context.first_ghost_ring = False
-        else:
-            delay = random.uniform(480, 900)
+        # if getattr(self.context, "first_ghost_ring", True):
+        #     delay = TIMING_FIRST_GHOST_RING # 15 minutes
+        #     self.context.first_ghost_ring = False
+        # else:
+        #     delay = random.uniform(480, 900)
 
-        print(f"Ghost Ring scheduled in {delay:.1f}s")
-        self.context.start_timer("ghost_ring_start", delay, self.trigger_ghost_ring)
+        # print(f"Ghost Ring scheduled in {delay:.1f}s")
+        # self.context.start_timer("ghost_ring_start", delay, self.trigger_ghost_ring)
 
     def on_exit(self):
-        self.context.stop_timer("ghost_ring_start")
+        # self.context.stop_timer("ghost_ring_start")
 
     def trigger_ghost_ring(self):
         # Randomly select a phone to ring
