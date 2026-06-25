@@ -879,23 +879,22 @@ class IdleState(State):
              self.context.t2.play_async(AUDIO_CONFIG["dial_tone_loop"])
              
         # Start Random Ghost Ringing Timer
-        # if getattr(self.context, "first_ghost_ring", True):
-        #     delay = TIMING_FIRST_GHOST_RING # 15 minutes
-        #     self.context.first_ghost_ring = False
-        # else:
-        #     delay = random.uniform(480, 900)
+        if getattr(self.context, "first_ghost_ring", True):
+            delay = TIMING_FIRST_GHOST_RING # 15 minutes
+            self.context.first_ghost_ring = False
+        else:
+            delay = random.uniform(480, 900)
 
-        # print(f"Ghost Ring scheduled in {delay:.1f}s")
-        # self.context.start_timer("ghost_ring_start", delay, self.trigger_ghost_ring)
+        print(f"Ghost Ring scheduled in {delay:.1f}s")
+        self.context.start_timer("ghost_ring_start", delay, self.trigger_ghost_ring)
 
     def on_exit(self):
-        pass
-        # self.context.stop_timer("ghost_ring_start")
+        self.context.stop_timer("ghost_ring_start")
 
-    # def trigger_ghost_ring(self):
-    #     # Randomly select a phone to ring
-    #     target_phone = random.choice([self.context.t1, self.context.t2])
-    #     self.context.transition_to(GhostRingingState(self.context, target_phone))
+    def trigger_ghost_ring(self):
+        # Randomly select a phone to ring
+        target_phone = random.choice([self.context.t1, self.context.t2])
+        self.context.transition_to(GhostRingingState(self.context, target_phone))
 
     def on_offhook(self, phone):
         self.context.sender = phone
@@ -909,35 +908,35 @@ class IdleState(State):
              self.context.receiver.stop_audio()
         return None
 
-# class GhostRingingState(State):
-#     def __init__(self, context, target_phone):
-#         super().__init__(context)
-#         self.target_phone = target_phone
+class GhostRingingState(State):
+    def __init__(self, context, target_phone):
+        super().__init__(context)
+        self.target_phone = target_phone
 
-#     def on_enter(self):
-#         print(f"--- GHOST RINGING ({self.target_phone.name}) ---")
+    def on_enter(self):
+        print(f"--- GHOST RINGING ({self.target_phone.name}) ---")
         
-#         # Ring the Physical Bell
-#         if self.context.main_serial:
-#             self.context.main_serial.write(f"{self.target_phone.name}_BELL_START\n".encode('utf-8'))
+        # Ring the Physical Bell
+        if self.context.main_serial:
+            self.context.main_serial.write(f"{self.target_phone.name}_BELL_START\n".encode('utf-8'))
             
-#         # Schedule Stop Ringing (30-60s)
-#         duration = random.uniform(30.0, 60.0)
-#         print(f"Ringing for {duration:.1f}s")
-#         self.context.start_timer("ghost_ring_end", duration, self.stop_ringing)
+        # Schedule Stop Ringing (30-60s)
+        duration = random.uniform(30.0, 60.0)
+        print(f"Ringing for {duration:.1f}s")
+        self.context.start_timer("ghost_ring_end", duration, self.stop_ringing)
 
-#     def stop_ringing(self):
-#         print("Ghost Ring Timeout")
-#         self.context.transition_to(IdleState(self.context))
+    def stop_ringing(self):
+        print("Ghost Ring Timeout")
+        self.context.transition_to(IdleState(self.context))
 
-#     def on_exit(self):
-#         self.context.stop_timer("ghost_ring_end")
-#         if self.context.main_serial:
-#             self.context.main_serial.write(f"{self.target_phone.name}_BELL_STOP\n".encode('utf-8'))
+    def on_exit(self):
+        self.context.stop_timer("ghost_ring_end")
+        if self.context.main_serial:
+            self.context.main_serial.write(f"{self.target_phone.name}_BELL_STOP\n".encode('utf-8'))
 
-#     def on_offhook(self, phone):
-#         print(f"Ghost Ring Interrupted by {phone.name}")
-#         return DialingState(self.context)
+    def on_offhook(self, phone):
+        print(f"Ghost Ring Interrupted by {phone.name}")
+        return DialingState(self.context)
 
 #--- CONVERSATION STATES ------------------------#
 class DialingState(State):
@@ -1487,7 +1486,7 @@ class PhoneSystem:
         self.sender = None
         self.receiver = None
         self.question = None
-        # self.first_ghost_ring = True
+        self.first_ghost_ring = True
 
         # START THE STATE MACHINE
         self.state = IdleState(self) 
