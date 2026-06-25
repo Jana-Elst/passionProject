@@ -891,10 +891,10 @@ class IdleState(State):
     def on_exit(self):
         # self.context.stop_timer("ghost_ring_start")
 
-    def trigger_ghost_ring(self):
-        # Randomly select a phone to ring
-        target_phone = random.choice([self.context.t1, self.context.t2])
-        self.context.transition_to(GhostRingingState(self.context, target_phone))
+    # def trigger_ghost_ring(self):
+    #     # Randomly select a phone to ring
+    #     target_phone = random.choice([self.context.t1, self.context.t2])
+    #     self.context.transition_to(GhostRingingState(self.context, target_phone))
 
     def on_offhook(self, phone):
         self.context.sender = phone
