@@ -1662,7 +1662,7 @@ def find_devices() -> Dict[str, Any]:
     # --- T1 Assignment ---
     if t1_pa_index is not None:
          print(f"T1 Assigned to Named Card 'T1' (Device {t1_pa_index})")
-         t1_channel = AudioChannel("T1", "left", device_index=t1_pa_index)
+         t1_channel = AudioChannel("T1", "left", device_index=0)
     elif len(fallback_devices) >= 1:
         idx = fallback_devices[0]
         print(f"WARNING: Card 'T1' not found. Fallback to Device {idx}")
@@ -1674,7 +1674,7 @@ def find_devices() -> Dict[str, Any]:
     # --- T2 Assignment ---
     if t2_pa_index is not None:
          print(f"T2 Assigned to Named Card 'T2' (Device {t2_pa_index})")
-         t2_channel = AudioChannel("T2", "right", device_index=t2_pa_index)
+         t2_channel = AudioChannel("T2", "right", device_index=1)
     elif len(fallback_devices) >= 2:
         idx = fallback_devices[1]
         print(f"WARNING: Card 'T2' not found. Fallback to Device {idx}")
