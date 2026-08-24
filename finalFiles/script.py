@@ -68,11 +68,16 @@ import serial.tools.list_ports
 import pyaudio
 import wave
 
+from call_logger import get_logger
+
 #------------------------ CONFIGURATION ------------------------#
 AUDIO_DIR = "audio"
+LOG_DIR = "logs"
 DEFAULT_BAUDRATE = 1000000 # Arduino Serial Rate
 DEVICE_SAMPLE_RATE = 48000
 CHUNK_SIZE = 2048
+
+log = get_logger(LOG_DIR)
 
 # Timers
 TIME_TILL_VOICEMAIL = 30.0
@@ -615,7 +620,7 @@ class Phone:
         return idx, offset
 
     def set_state(self, new_state: str):
-        print(f"Phone {self.number} State: {self.state} -> {new_state}")
+        log.info(f"{self.name} hook: {self.state} -> {new_state}")
         self.state = new_state
 
     def play_async(self, playlist: List[Union[str, Tuple[str, float], List]], start_index: int = 0, start_offset: float = 0.0):
@@ -815,10 +820,33 @@ def file_has_sound(filename: str, threshold: int = 500) -> bool:
                         return True
     except Exception as e:
             print(f"Error checking sound in {filename}: {e}")
-    
+
     return False
 
-def play_synced_audio(sender: Phone, receiver: Phone, 
+def describe_playback(phone: Phone) -> str:
+    """Describes what a phone is currently playing, for logging purposes."""
+    if not phone.audio.is_playing:
+        return "no audio playing"
+
+    idx, offset = phone.get_playback_status()
+    if not (0 <= idx < len(phone.current_playlist)):
+        return "no audio playing"
+
+    item = phone.current_playlist[idx]
+    if isinstance(item, str):
+        return f"playing '{item}' at {offset:.1f}s"
+    if isinstance(item, tuple):
+        if item[0] == "TONE":
+            return f"playing TONE {item[1]}Hz"
+        if item[0] == "DTMF":
+            return f"playing DTMF {item[1]}+{item[2]}Hz"
+        if item[0] == "PAUSE":
+            return "playing PAUSE"
+        if item[0] == "LOOP":
+            return "playing LOOP"
+    return "playing audio"
+
+def play_synced_audio(sender: Phone, receiver: Phone,
                      sender_params: Union[List, Tuple[List, float]], 
                      receiver_params: Union[List, Tuple[List, float]]) -> float:
     """
@@ -896,7 +924,7 @@ class IdleState(State):
         else:
             delay = random.uniform(TIMING_GHOST_RING_REPEAT_MIN, TIMING_GHOST_RING_REPEAT_MAX)
 
-        print(f"Ghost Ring scheduled in {delay:.1f}s")
+        log.info(f"Ghost Ring scheduled in {delay:.1f}s")
         self.context.start_timer("ghost_ring_start", delay, self.trigger_ghost_ring)
 
     def on_exit(self):
@@ -911,7 +939,7 @@ class IdleState(State):
         self.context.sender = phone
         self.context.receiver = self.context.get_other_phone(phone)
 
-        print(f"Call Initiated by {phone.name}")
+        log.info(f"Call Initiated by {phone.name}")
         return DialingState(self.context)
     
     def on_onhook(self, phone):
@@ -925,19 +953,19 @@ class GhostRingingState(State):
         self.target_phone = target_phone
 
     def on_enter(self):
-        print(f"--- GHOST RINGING ({self.target_phone.name}) ---")
-        
+        log.info(f"--- GHOST RINGING ({self.target_phone.name}) ---")
+
         # Ring the Physical Bell
         if self.context.main_serial:
             self.context.main_serial.write(f"{self.target_phone.name}_BELL_START\n".encode('utf-8'))
-            
+
         # Schedule Stop Ringing (30-60s)
         duration = random.uniform(TIMING_GHOST_RING_DURATION_MIN, TIMING_GHOST_RING_DURATION_MAX)
-        print(f"Ringing for {duration:.1f}s")
+        log.info(f"Ringing for {duration:.1f}s")
         self.context.start_timer("ghost_ring_end", duration, self.stop_ringing)
 
     def stop_ringing(self):
-        print("Ghost Ring Timeout")
+        log.info("Ghost Ring Timeout")
         self.context.transition_to(IdleState(self.context))
 
     def on_exit(self):
@@ -946,7 +974,7 @@ class GhostRingingState(State):
             self.context.main_serial.write(f"{self.target_phone.name}_BELL_STOP\n".encode('utf-8'))
 
     def on_offhook(self, phone):
-        print(f"Ghost Ring Interrupted by {phone.name}")
+        log.info(f"Ghost Ring Interrupted by {phone.name}")
         self.context.sender = phone
         self.context.receiver = self.context.get_other_phone(phone)
         return DialingState(self.context)
@@ -1005,7 +1033,7 @@ class DialingState(State):
         if phone == self.context.sender:
             self.context.sender.stop_audio()
             self.dial_buffer += str(number)
-            print(f"Buffer: {self.dial_buffer}")
+            log.info(f"{phone.name} dialing: {self.dial_buffer}")
             
             # Play Feedback + Reminder
             # The feedback will play once, then the reminder loop will resume
@@ -1019,7 +1047,7 @@ class DialingState(State):
             
             elif current_input.startswith("0") and len(current_input) > 1:
                 # Valid
-                print(f"Valid Number: {current_input}")
+                log.info(f"{phone.name} dialed number: {current_input}")
                 self.context.question = current_input
                 
                 if self.context.receiver.state == PhoneState.OFFHOOK:
@@ -1028,7 +1056,7 @@ class DialingState(State):
                     return RingingState(self.context)
             
             elif not current_input.startswith("0") and len(current_input) > 0:
-                 print("Wrong Number")
+                 log.info(f"{phone.name} dialed wrong number: {current_input}")
                  # Play Feedback (already queued above) -> then Wrong Number -> then Reminder
                  # But Wrong Number should override.
                  self.context.sender.play_async(AUDIO_CONFIG["dial_feedback"] + AUDIO_CONFIG["wrong_number"] + AUDIO_CONFIG["dial_reminder"])
@@ -1451,15 +1479,15 @@ class VoicemailRecording(State):
 
     def save_and_cleanup(self):
         if not file_has_sound(self.temp_filename):
-            print("Discarded VM (Silent)")
+            log.info(f"{self.context.sender.name} voicemail discarded (silent)")
             return
 
         if get_playlist_duration([self.temp_filename]) < 1.0:
-            print("Discarded VM (Too Short)")
+            log.info(f"{self.context.sender.name} voicemail discarded (too short)")
             return
 
         final_filename = f"voicemail-{self.context.sender.name}-{self.context.question}.wav"
-        print(f"Saved VM: {final_filename}")
+        log.info(f"{self.context.sender.name} voicemail saved: {final_filename}")
         
         src = f"{AUDIO_DIR}/{self.temp_filename}"
         dst = f"{AUDIO_DIR}/{final_filename}"
@@ -1479,7 +1507,8 @@ class VoicemailRecording(State):
 
     def on_onhook(self, phone):
         if phone == self.context.sender:
-            # self.finish_recording() 
+            # self.finish_recording()
+            log.info(f"{phone.name} hung up during VoicemailRecording — recording discarded (not saved)")
             return IdleState(self.context)
         return None
 
@@ -1500,16 +1529,20 @@ class PhoneSystem:
         self.receiver = None
         self.question = None
         self.first_ghost_ring = True
+        self._state_started_at = time.time()
 
         # START THE STATE MACHINE
-        self.state = IdleState(self) 
+        self.state = IdleState(self)
         self.state.on_enter()
 
     def transition_to(self, new_state):
         if new_state is None: return
-        print(f"SWITCHING STATE: {type(self.state).__name__} -> {type(new_state).__name__}")
+        elapsed = time.time() - self._state_started_at
+        log.info(f"{type(self.state).__name__} lasted {elapsed:.1f}s")
+        log.info(f"SWITCHING STATE: {type(self.state).__name__} -> {type(new_state).__name__}")
         self.state.on_exit()
         self.state = new_state
+        self._state_started_at = time.time()
         self.state.on_enter()
 
     # --- Timers Helper ---
@@ -1555,6 +1588,8 @@ class PhoneSystem:
         if action_type == "is_offHook":
             phone.set_state(PhoneState.OFFHOOK)
         elif action_type == "is_onHook":
+            current_state_name = type(self.state).__name__
+            log.info(f"{phone.name} hung up during {current_state_name} ({describe_playback(phone)})")
             phone.set_state(PhoneState.ONHOOK)
 
         # 2. Ask the current state what to do
@@ -1752,16 +1787,12 @@ def main():
                         try:
                             phone_system.handle_event(*action)
                         except Exception as e:
-                            print(f"Error processing action: {e}")
-                            import traceback
-                            traceback.print_exc()
-                            pass
+                            log.exception(f"Error processing action: {e}")
                     elif line:
-                        print(f"Unknown Line: {line}")
-                        pass
-                        
+                        log.warning(f"Unknown Line: {line}")
+
                 except Exception as e:
-                    print(f"Input Error: {e}")
+                    log.error(f"Input Error: {e}")
             else:
                 time.sleep(0.01)
 
