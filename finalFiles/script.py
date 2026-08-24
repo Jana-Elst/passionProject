@@ -76,7 +76,18 @@ CHUNK_SIZE = 2048
 
 # Timers
 TIME_TILL_VOICEMAIL = 30.0
-TIMING_FIRST_GHOST_RING = 900.0
+
+TIMING_FIRST_GHOST_RING = 900.0  # 15 minutes
+TIMING_GHOST_RING_REPEAT_MIN = 1200.0  # 20 minutes
+TIMING_GHOST_RING_REPEAT_MAX = 2400.0  # 40 minutes
+
+# TIMING_FIRST_GHOST_RING = 30.0  # 30 sec
+# TIMING_GHOST_RING_REPEAT_MIN = 30.0  # 30 sec
+# TIMING_GHOST_RING_REPEAT_MAX = 30.0  # 30 sec
+
+TIMING_GHOST_RING_DURATION_MIN = 30.0
+TIMING_GHOST_RING_DURATION_MAX = 60.0
+
 PAUSE_AROUND_QUESTION_OR_TOPIC = 0.3
 
 #--- Tone Definitions (Type, Freq, Duration, [ModFreq, ModIdx]) ---
@@ -883,7 +894,7 @@ class IdleState(State):
             delay = TIMING_FIRST_GHOST_RING # 15 minutes
             self.context.first_ghost_ring = False
         else:
-            delay = random.uniform(480, 900)
+            delay = random.uniform(TIMING_GHOST_RING_REPEAT_MIN, TIMING_GHOST_RING_REPEAT_MAX)
 
         print(f"Ghost Ring scheduled in {delay:.1f}s")
         self.context.start_timer("ghost_ring_start", delay, self.trigger_ghost_ring)
@@ -921,7 +932,7 @@ class GhostRingingState(State):
             self.context.main_serial.write(f"{self.target_phone.name}_BELL_START\n".encode('utf-8'))
             
         # Schedule Stop Ringing (30-60s)
-        duration = random.uniform(30.0, 60.0)
+        duration = random.uniform(TIMING_GHOST_RING_DURATION_MIN, TIMING_GHOST_RING_DURATION_MAX)
         print(f"Ringing for {duration:.1f}s")
         self.context.start_timer("ghost_ring_end", duration, self.stop_ringing)
 
@@ -936,6 +947,8 @@ class GhostRingingState(State):
 
     def on_offhook(self, phone):
         print(f"Ghost Ring Interrupted by {phone.name}")
+        self.context.sender = phone
+        self.context.receiver = self.context.get_other_phone(phone)
         return DialingState(self.context)
 
 #--- CONVERSATION STATES ------------------------#
