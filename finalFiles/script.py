@@ -76,6 +76,7 @@ LOG_DIR = "logs"
 DEFAULT_BAUDRATE = 1000000 # Arduino Serial Rate
 DEVICE_SAMPLE_RATE = 48000
 CHUNK_SIZE = 2048
+AUDIO_STREAM_RETRY_INTERVAL = 3.0 # Seconds between retries to (re)open an audio output stream
 
 log = get_logger(LOG_DIR)
 
@@ -275,6 +276,7 @@ class AudioChannel:
         """
         self.running = True
         self.stream = self._open_stream()
+        self._last_stream_retry = time.time()
         self.thread = threading.Thread(target=self._engine_loop, daemon=True)
         self.thread.start()
 
@@ -288,7 +290,7 @@ class AudioChannel:
             print(f"[{self.name}] Engine Started at {DEVICE_SAMPLE_RATE}Hz (Device {self.device_index})")
             return stream
         except Exception as e:
-            print(f"[{self.name}] CRITICAL: Failed to open stream: {e}")
+            log.warning(f"[{self.name}] Failed to open audio stream: {e} (will keep retrying in the background every {AUDIO_STREAM_RETRY_INTERVAL}s)")
             return None
 
     def play(self, filename: str, stop_event: threading.Event, start_offset: float = 0.0):
@@ -448,9 +450,21 @@ class AudioChannel:
         
         while self.running:
             try:
+                # If the stream isn't open (e.g. USB sound card not ready yet at boot),
+                # retry periodically instead of writing to a None stream.
+                if self.stream is None:
+                    now = time.time()
+                    if now - self._last_stream_retry >= AUDIO_STREAM_RETRY_INTERVAL:
+                        self._last_stream_retry = now
+                        self.stream = self._open_stream()
+                        if self.stream:
+                            log.info(f"[{self.name}] Audio stream recovered.")
+                    time.sleep(0.1)
+                    continue
+
                 # Snapshot state
                 audio_file_reader = self.active_audio_file
-                
+
                 if audio_file_reader and self.is_playing and not self.stop_requested:
                     # Reading frames
                     raw_data = audio_file_reader.readframes(CHUNK_SIZE)
