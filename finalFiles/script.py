@@ -70,10 +70,51 @@ import pyaudio
 import wave
 
 try:
-    from speexdsp import EchoCanceller
+    # Removed from the stdlib in Python 3.13 (PEP 594); pip install audioop-lts restores
+    # it under the same import name. Falls back to a pure-Python RMS if unavailable.
+    import audioop
 except ImportError:
+    audioop = None
+
+if 'imp' not in sys.modules:
+    try:
+        import imp  # noqa: F401 (removed in Python 3.12+)
+    except ModuleNotFoundError:
+        # The `speexdsp` PyPI package (unmaintained since 2018) ships a SWIG-generated
+        # wrapper that still does `import imp` just to load its compiled _speexdsp
+        # extension. Python 3.12 removed `imp` from the stdlib entirely, so on newer
+        # Python that import now crashes before speexdsp can even report a real error.
+        # This shim implements just the two calls that wrapper makes (find_module /
+        # load_module) in terms of importlib, so the real C extension still loads fine.
+        import types
+        import importlib.util
+        import importlib.machinery
+
+        def _imp_find_module(name, path=None):
+            spec = importlib.machinery.PathFinder().find_spec(name, path)
+            if spec is None or spec.origin is None:
+                raise ImportError(name)
+            # Must be a truthy, real file object: the SWIG wrapper only calls
+            # imp.load_module() when this is not None, and calls .close() on it after.
+            return open(spec.origin, 'rb'), spec.origin, ('', '', 0)
+
+        def _imp_load_module(name, file, pathname, description):
+            spec = importlib.util.spec_from_file_location(name, pathname)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module
+
+        _imp_shim = types.ModuleType('imp')
+        _imp_shim.find_module = _imp_find_module
+        _imp_shim.load_module = _imp_load_module
+        sys.modules['imp'] = _imp_shim
+
+try:
+    from speexdsp import EchoCanceller
+except ImportError as e:
     # Needed for the digital intercom's acoustic echo cancellation.
     # Install with: sudo apt install libspeexdsp-dev swig && pip install speexdsp
+    print(f"WARNING: speexdsp import failed ({e}) - running WITHOUT echo cancellation")
     EchoCanceller = None
 
 from call_logger import get_logger
@@ -121,6 +162,10 @@ AEC_FILTER_LENGTH = 4096
 # hum/echo still gets through, lower if quiet speech gets clipped.
 INTERCOM_SQUELCH_THRESHOLD = 400
 INTERCOM_HANGOVER_TIME = 0.3
+# Gate transitions ramp linearly over this many samples (instead of an instant on/off jump)
+# to avoid an audible click - only the transition edge itself needs to be smoothed, so this
+# stays tiny and cheap even in pure Python.
+INTERCOM_GATE_FADE_SAMPLES = 32
 
 PAUSE_AROUND_QUESTION_OR_TOPIC = 0.3
 
@@ -470,14 +515,15 @@ class AudioChannel:
         """
         stream = None
         last_active_time = 0.0
+        gate_open = False  # tracks previous chunk's gate state, to fade only on transitions
         frame_bytes = AEC_FRAME_SIZE * 2  # 16-bit mono
 
         echo_canceller = None
         if EchoCanceller is not None:
             echo_canceller = EchoCanceller.create(AEC_FRAME_SIZE, AEC_FILTER_LENGTH, DEVICE_SAMPLE_RATE)
         else:
-            print(f"[{self.name}] WARNING: speexdsp not installed - running WITHOUT echo cancellation "
-                  f"(install with: sudo apt install libspeexdsp-dev swig && pip install speexdsp)")
+            print(f"[{self.name}] WARNING: speexdsp unavailable (see import warning at startup) - "
+                  f"running WITHOUT echo cancellation")
 
         try:
             stream = self.audio_system.open(format=pyaudio.paInt16,
@@ -505,8 +551,16 @@ class AudioChannel:
                 if chunk_rms(data) > squelch_threshold:
                     last_active_time = now
 
-                if now - last_active_time <= hangover_time:
+                new_gate_open = (now - last_active_time <= hangover_time)
+                if new_gate_open:
+                    if not gate_open:
+                        data = fade_edge(data, fade_in=True)  # gate just opened - ramp up
                     destination.push(data)
+                elif gate_open:
+                    # gate just closed this chunk - ramp down before going silent, instead
+                    # of an instant amplitude jump (that's what actually causes the click).
+                    destination.push(fade_edge(data, fade_in=False))
+                gate_open = new_gate_open
 
         except Exception as e:
             print(f"[{self.name}] Live Mic Error: {e}")
@@ -951,12 +1005,34 @@ def get_playlist_duration(playlist: List[Union[str, Tuple[str, float], List]]) -
     
 def chunk_rms(data: bytes) -> float:
     """Computes the RMS (loudness) level of a raw 16-bit PCM chunk."""
+    if not data:
+        return 0.0
+    if audioop is not None:
+        return audioop.rms(data, 2)  # 2 = bytes per sample (16-bit)
+
     count = len(data) // 2
     if count == 0:
         return 0.0
     shorts = struct.unpack(f"<{count}h", data)
     sum_squares = sum(s**2 for s in shorts)
     return math.sqrt(sum_squares / count)
+
+def fade_edge(data: bytes, fade_in: bool, sample_count: int = INTERCOM_GATE_FADE_SAMPLES) -> bytes:
+    """
+    Linearly ramps the first `sample_count` samples of a 16-bit mono chunk up (fade_in) or
+    down (fade_out). Used only at noise-gate transitions, so an instant amplitude jump
+    (which sounds like a click/pop) doesn't happen - the rest of the chunk is untouched.
+    """
+    n = min(sample_count, len(data) // 2)
+    if n <= 0:
+        return data
+    out = bytearray(data)
+    for i in range(n):
+        factor = (i / n) if fade_in else (1 - i / n)
+        idx = i * 2
+        val = struct.unpack_from('<h', out, idx)[0]
+        struct.pack_into('<h', out, idx, int(val * factor))
+    return bytes(out)
 
 def file_has_sound(filename: str, threshold: int = 500) -> bool:
     """Checks if a recording has sound above a certain RMS threshold."""
