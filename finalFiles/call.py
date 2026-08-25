@@ -1,16 +1,13 @@
 import pyaudio
-import threading
 import time
 import re
 import os
-import struct
-import random
 import audioop
 import queue
 
 DEVICE_SAMPLE_RATE = 48000
-CHUNK_SIZE = 4096
-running = True
+CHUNK_SIZE = 1024  # Callbacks can handle small chunks perfectly, drastically reducing latency!
+VOLUME_BOOST = 2.0 # 2.0x volume boost (your mics are already loud, so 4.0 was causing clipping noise!)
 
 # --- ALSA Device Finding Logic ---
 def get_alsa_card_index(target_name: str):
@@ -34,157 +31,99 @@ def find_device_index(p: pyaudio.PyAudio, target_name: str):
             return i
     return None
 
-# --- Elastic Buffer ---
-class LiveAudioBuffer:
-    def __init__(self):
-        self._queue = queue.Queue(maxsize=20) 
-        
-    def push(self, data: bytes):
-        if self._queue.full():
-            try: self._queue.get_nowait() 
-            except queue.Empty: pass
-        self._queue.put(data)
-        
-    def pop(self, size: int) -> bytes:
-        try:
-            # THE MAGIC FIX: block=True forces the speaker to patiently wait for the 
-            # microphone data instead of blindly injecting silence gaps!
-            return self._queue.get(block=True, timeout=5.0)
-        except queue.Empty:
-            return b'\x00' * (size * 2) 
-
-# --- Core Audio Classes ---
-class AudioOutputEngine:
-    def __init__(self, name: str, device_index: int):
+# --- Callback Audio Bridge ---
+class DigitalIntercomBridge:
+    """Uses C-level callbacks to pipe audio flawlessly between two devices."""
+    def __init__(self, p: pyaudio.PyAudio, in_idx: int, out_idx: int, name: str):
         self.name = name
-        self.device_index = device_index
-        self.audio_system = pyaudio.PyAudio()
-        self.active_buffer = None
+        self.p = p
+        self.q = queue.Queue(maxsize=20)
         
-        self.stream = self.audio_system.open(
-            format=pyaudio.paInt16,
-            channels=2,  
-            rate=DEVICE_SAMPLE_RATE,
-            output=True,
-            output_device_index=self.device_index
+        # Pre-fill the queue with ~100ms of pure silence to create a jitter cushion.
+        # This guarantees the speaker ALSA buffer NEVER starves and tears.
+        silence = b'\x00' * (CHUNK_SIZE * 2)
+        for _ in range(5):
+            self.q.put(silence)
+            
+        # Open Mic (Input)
+        self.in_stream = self.p.open(
+            format=pyaudio.paInt16, channels=1, rate=DEVICE_SAMPLE_RATE,
+            input=True, input_device_index=in_idx, frames_per_buffer=CHUNK_SIZE,
+            stream_callback=self.mic_callback
         )
-        self.thread = threading.Thread(target=self._engine_loop, daemon=True)
-        self.thread.start()
+        
+        # Open Speaker (Output)
+        self.out_stream = self.p.open(
+            format=pyaudio.paInt16, channels=2, rate=DEVICE_SAMPLE_RATE,
+            output=True, output_device_index=out_idx, frames_per_buffer=CHUNK_SIZE,
+            stream_callback=self.spk_callback
+        )
 
-    def play_buffer(self, audio_buffer: LiveAudioBuffer):
-        self.active_buffer = audio_buffer
+    def mic_callback(self, in_data, frame_count, time_info, status):
+        """Called automatically by PyAudio when the mic has data."""
+        if not self.q.full():
+            # Boost the volume cleanly
+            boosted = audioop.mul(in_data, 2, VOLUME_BOOST)
+            self.q.put(boosted)
+        return (None, pyaudio.paContinue)
 
-    def _engine_loop(self):
-        dither = bytearray(CHUNK_SIZE * 4)
-        for i in range(0, len(dither), 4):
-            val_l, val_r = random.randint(-1, 1), random.randint(-1, 1)
-            dither[i:i+2] = struct.pack('<h', val_l)
-            dither[i+2:i+4] = struct.pack('<h', val_r)
-        silence = bytes(dither)
-
-        while running:
-            if self.active_buffer:
-                # This will safely block until the mic thread provides the audio
-                raw_mono = self.active_buffer.pop(CHUNK_SIZE)
-                stereo_data = audioop.tostereo(raw_mono, 2, 1, 1)
-                try:
-                    self.stream.write(stereo_data)
-                except Exception:
-                    pass
-            else:
-                try:
-                    self.stream.write(silence)
-                except Exception:
-                    pass
-
-    def close(self):
-        if self.stream:
-            self.stream.stop_stream()
-            self.stream.close()
-        self.audio_system.terminate()
-
-def mic_reader_thread(name: str, device_index: int, destination_buffer: LiveAudioBuffer):
-    p = pyaudio.PyAudio()
-    stream = p.open(
-        format=pyaudio.paInt16,
-        channels=1, 
-        rate=DEVICE_SAMPLE_RATE,
-        input=True,
-        input_device_index=device_index,
-        frames_per_buffer=CHUNK_SIZE
-    )
-    
-    print(f"[{name}] Mic opened. Listening...")
-    loop_count = 0
-    
-    while running:
+    def spk_callback(self, in_data, frame_count, time_info, status):
+        """Called automatically by PyAudio when the speaker needs data."""
         try:
-            data = stream.read(CHUNK_SIZE, exception_on_overflow=False)
+            # Instantly pop data. No blocking allowed in callbacks!
+            mono_data = self.q.get_nowait()
+        except queue.Empty:
+            # If we fall behind, inject pure silence
+            mono_data = b'\x00' * (frame_count * 2)
             
-            # Removed the 4x multiplier to stop the clipping noise! 
-            # Your vintage mic is plenty loud on its own.
-            destination_buffer.push(data)
-            
-            loop_count += 1
-            if loop_count % 10 == 0:
-                rms = audioop.rms(data, 2)
-                meter = "#" * min(int(rms / 100), 40)
-                print(f"{name} Mic Vol: {rms:5d} | {meter}")
-                
-        except Exception as e:
-            print(f"[{name}] Mic error: {e}")
-            break
-            
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
+        # Duplicate mono to stereo evenly
+        stereo_data = audioop.tostereo(mono_data, 2, 1, 1)
+        return (stereo_data, pyaudio.paContinue)
+
+    def start(self):
+        self.in_stream.start_stream()
+        self.out_stream.start_stream()
+        print(f"[{self.name}] Bridge Active.")
+
+    def stop(self):
+        self.in_stream.stop_stream()
+        self.out_stream.stop_stream()
+        self.in_stream.close()
+        self.out_stream.close()
 
 # --- Main Test Runner ---
 def main():
-    global running
-    print("--- DIGITAL CALL TEST SCRIPT (FINAL) ---")
+    print("--- DIGITAL CALL TEST SCRIPT (CALLBACK API) ---")
     p = pyaudio.PyAudio()
     t1_idx = find_device_index(p, "T1")
     t2_idx = find_device_index(p, "T2")
-    p.terminate()
 
     if t1_idx is None or t2_idx is None:
         print("CRITICAL: Could not find T1 and T2 ALSA devices.")
+        p.terminate()
         return
 
-    print("\n1. Initializing Output Engines...")
-    t1_out = AudioOutputEngine("T1_SPK", t1_idx)
-    t2_out = AudioOutputEngine("T2_SPK", t2_idx)
-    
-    buf_t1_to_t2 = LiveAudioBuffer()
-    buf_t2_to_t1 = LiveAudioBuffer()
+    print("\nInitializing Callback Bridges...")
+    # Bridge 1: T1 Mic goes to T2 Speaker
+    bridge_1 = DigitalIntercomBridge(p, in_idx=t1_idx, out_idx=t2_idx, name="T1->T2")
+    # Bridge 2: T2 Mic goes to T1 Speaker
+    bridge_2 = DigitalIntercomBridge(p, in_idx=t2_idx, out_idx=t1_idx, name="T2->T1")
 
-    print("\n2. Initializing Microphone Inputs...")
-    thread_m1 = threading.Thread(target=mic_reader_thread, args=("T1", t1_idx, buf_t1_to_t2), daemon=True)
-    thread_m2 = threading.Thread(target=mic_reader_thread, args=("T2", t2_idx, buf_t2_to_t1), daemon=True)
-    thread_m1.start()
-    thread_m2.start()
+    bridge_1.start()
+    bridge_2.start()
 
-    # Create a 0.5-second buffer head-start so the mic is always safely ahead of the speaker
-    print("Building audio cushion to prevent skips...")
-    time.sleep(0.5)
-
-    print("\n[ CROSS-CONNECTING AUDIO ]")
-    t1_out.play_buffer(buf_t2_to_t1)
-    t2_out.play_buffer(buf_t1_to_t2)
-
-    print("\n*** Call is live! Pick up the phones and speak. ***")
+    print("\n*** Call is live! ***")
+    print("Press Ctrl+C to hang up.\n")
     
     try:
         while True:
-            time.sleep(0.1)
+            time.sleep(1.0)
     except KeyboardInterrupt:
         print("\nHanging up...")
-        running = False
 
-    time.sleep(0.5)
-    t1_out.close()
-    t2_out.close()
+    bridge_1.stop()
+    bridge_2.stop()
+    p.terminate()
     print("Done.")
 
 if __name__ == "__main__":
