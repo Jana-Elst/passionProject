@@ -69,6 +69,13 @@ import serial.tools.list_ports
 import pyaudio
 import wave
 
+try:
+    from speexdsp import EchoCanceller
+except ImportError:
+    # Needed for the digital intercom's acoustic echo cancellation.
+    # Install with: sudo apt install libspeexdsp-dev swig && pip install speexdsp
+    EchoCanceller = None
+
 from call_logger import get_logger
 
 #------------------------ CONFIGURATION ------------------------#
@@ -95,11 +102,23 @@ TIMING_GHOST_RING_REPEAT_MAX = 2400.0  # 40 minutes
 TIMING_GHOST_RING_DURATION_MIN = 30.0
 TIMING_GHOST_RING_DURATION_MAX = 60.0
 
-# Digital Intercom Squelch: the live mic->speaker bridge between T1 and T2 forms a closed
-# loop (each phone's own speaker output can leak back into its own mic). Forwarding audio
-# only while it's above this RMS level (with a short hangover so word endings aren't cut
-# off) stops that loop from self-sustaining into feedback/howling. Tune on real hardware:
-# raise if background hum/noise still triggers it, lower if quiet speech gets clipped.
+# Digital Intercom: the live mic->speaker bridge between T1 and T2 forms a closed loop
+# (each phone's own speaker output leaks back into its own mic, electrically and/or
+# acoustically). A gate alone can't fix this - real speech has to cross the same threshold
+# as the leaked echo, so it re-triggers the loop too. Instead, each phone runs an adaptive
+# echo canceller (speexdsp) that uses "what we just played into this phone's speaker" as a
+# reference to subtract the predicted echo out of "what this phone's mic just picked up",
+# before forwarding to the other side.
+#   - AEC_FRAME_SIZE: speexdsp processes audio in small blocks (must divide CHUNK_SIZE evenly).
+#   - AEC_FILTER_LENGTH: how many samples of echo "tail" it can model - needs to comfortably
+#     cover the speaker->mic loopback delay on this hardware. Raise if echo persists.
+AEC_FRAME_SIZE = 256
+AEC_FILTER_LENGTH = 4096
+
+# Residual noise gate (runs AFTER echo cancellation, which typically only attenuates rather
+# than perfectly eliminates echo): forwards audio only while it's above this RMS level, with
+# a short hangover so word endings aren't cut off. Tune on real hardware: raise if leftover
+# hum/echo still gets through, lower if quiet speech gets clipped.
 INTERCOM_SQUELCH_THRESHOLD = 400
 INTERCOM_HANGOVER_TIME = 0.3
 
@@ -434,18 +453,32 @@ class AudioChannel:
         except Exception as e:
             print(f"Error recording on {self.name}: {e}")
 
-    def stream_to(self, destination: 'LiveAudioBuffer', stop_event: threading.Event,
+    def stream_to(self, destination: 'LiveAudioBuffer', own_playback_buffer: 'LiveAudioBuffer',
+                  stop_event: threading.Event,
                   squelch_threshold: float = INTERCOM_SQUELCH_THRESHOLD,
                   hangover_time: float = INTERCOM_HANGOVER_TIME):
         """
-        Continuously reads mic input and pushes raw chunks into destination (digital intercom).
-        Chunks are only forwarded while the signal is above squelch_threshold (plus a short
-        hangover afterwards). Without this, the mic->speaker->mic loop between the two phones
-        can self-sustain into audio feedback, since it needs no real speech to keep going once
-        it starts - gating out near-silent audio stops the loop from ever closing.
+        Continuously reads mic input, cancels out this phone's own speaker echo, and pushes
+        the cleaned chunks into destination (digital intercom).
+
+        own_playback_buffer is whatever is currently being played into THIS phone's own
+        speaker (the far-end reference) - it leaks back into this phone's own mic (near-end),
+        electrically and/or acoustically, forming a closed loop with the other phone. An
+        adaptive echo canceller subtracts the predicted echo using that reference before
+        anything is forwarded. A residual noise gate on top (squelch_threshold + hangover_time)
+        mops up whatever the canceller doesn't fully attenuate.
         """
         stream = None
         last_active_time = 0.0
+        frame_bytes = AEC_FRAME_SIZE * 2  # 16-bit mono
+
+        echo_canceller = None
+        if EchoCanceller is not None:
+            echo_canceller = EchoCanceller.create(AEC_FRAME_SIZE, AEC_FILTER_LENGTH, DEVICE_SAMPLE_RATE)
+        else:
+            print(f"[{self.name}] WARNING: speexdsp not installed - running WITHOUT echo cancellation "
+                  f"(install with: sudo apt install libspeexdsp-dev swig && pip install speexdsp)")
+
         try:
             stream = self.audio_system.open(format=pyaudio.paInt16,
                                  channels=1,
@@ -457,7 +490,16 @@ class AudioChannel:
             print(f"[{self.name}] Live mic stream started (-> intercom bridge)")
 
             while not stop_event.is_set():
-                data = stream.read(CHUNK_SIZE, exception_on_overflow=False)
+                near = stream.read(CHUNK_SIZE, exception_on_overflow=False)
+
+                if echo_canceller is not None:
+                    far = own_playback_buffer.pop_reference()
+                    cleaned = bytearray()
+                    for i in range(0, len(near), frame_bytes):
+                        cleaned.extend(echo_canceller.process(near[i:i + frame_bytes], far[i:i + frame_bytes]))
+                    data = bytes(cleaned)
+                else:
+                    data = near
 
                 now = time.time()
                 if chunk_rms(data) > squelch_threshold:
@@ -670,6 +712,9 @@ class LiveAudioBuffer:
     """
     def __init__(self, max_chunks: int = 6):
         self._queue = deque(maxlen=max_chunks)  # oldest chunk dropped on overflow, caps latency
+        # Mirrors every chunk actually sent to the speaker, so this phone's OWN mic-capture
+        # thread can use it as the echo canceller's far-end reference (see AudioChannel.stream_to).
+        self._reference_queue = deque(maxlen=max_chunks)
         self._lock = threading.Lock()
         self.frequency = "LIVE intercom audio"  # for play_generator's log line
 
@@ -682,9 +727,16 @@ class LiveAudioBuffer:
     def readframes(self, n_frames: int) -> bytes:
         # Must never return b"" - that means "end of file" to _engine_loop and would stop playback.
         with self._lock:
-            if self._queue:
-                return self._queue.popleft()
-        return b'\x00\x00' * n_frames
+            chunk = self._queue.popleft() if self._queue else b'\x00\x00' * n_frames
+            self._reference_queue.append(chunk)
+            return chunk
+
+    def pop_reference(self) -> bytes:
+        """Returns the next chunk that was actually sent to the speaker (echo canceller far-end)."""
+        with self._lock:
+            if self._reference_queue:
+                return self._reference_queue.popleft()
+        return b'\x00\x00' * CHUNK_SIZE
 
 #------------------------ PHONE LOGIC ------------------------#
 class Phone:
@@ -1332,10 +1384,12 @@ class ConversationState(State):
         # calls stop_audio() on sender/receiver while this state is active.
         self.mic_stop_event = threading.Event()
         self.mic_threads = [
+            # args: (destination, own_playback_buffer, stop_event) - own_playback_buffer is
+            # this phone's own echo-cancellation reference (what's playing in its own speaker).
             threading.Thread(target=self.context.sender.audio.stream_to,
-                              args=(self.buffer_for_receiver, self.mic_stop_event), daemon=True),
+                              args=(self.buffer_for_receiver, self.buffer_for_sender, self.mic_stop_event), daemon=True),
             threading.Thread(target=self.context.receiver.audio.stream_to,
-                              args=(self.buffer_for_sender, self.mic_stop_event), daemon=True),
+                              args=(self.buffer_for_sender, self.buffer_for_receiver, self.mic_stop_event), daemon=True),
         ]
         for t in self.mic_threads:
             t.start()
