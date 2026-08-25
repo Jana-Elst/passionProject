@@ -84,7 +84,11 @@ class PhoneAudio:
     def _mic_loop(self):
         while not self.stop_event.is_set():
             try:
-                data = self.in_stream.read(CHUNK_SIZE, exception_on_overflow=False)
+                # exception_on_overflow=True on purpose here (unusual): we need to know if
+                # ALSA is silently dropping/corrupting samples INSIDE this read() call itself,
+                # which exception_on_overflow=False would hide completely - PyAudio would just
+                # hand back whatever it has, no error, even if what it has has a gap in it.
+                data = self.in_stream.read(CHUNK_SIZE, exception_on_overflow=True)
                 if self.peer is not None:
                     boosted = audioop.mul(data, 2, VOLUME_BOOST)
                     if not self.peer.out_queue.full():
@@ -105,7 +109,10 @@ class PhoneAudio:
                     print(f"[{self.name}] UNDERRUN #{self.underrun_count}: queue empty, playing silence")
                     mono_data = b'\x00' * (CHUNK_SIZE * 2)
                 stereo_data = audioop.tostereo(mono_data, 2, 1, 1)
-                self.out_stream.write(stereo_data)
+                # exception_on_underflow=True so an ALSA-level underflow INSIDE this write()
+                # call (distinct from my own queue running dry, already tracked above) shows
+                # up instead of being silently ignored.
+                self.out_stream.write(stereo_data, exception_on_underflow=True)
             except Exception as e:
                 print(f"[{self.name}] spk_loop error: {e}")
 
