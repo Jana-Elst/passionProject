@@ -140,17 +140,17 @@ def main():
     # isn't running yet just backs up that peer's queue with stale audio nobody's draining,
     # which then plays back as a delayed backlog once that peer finally starts.
 
-    # Staged startup, on purpose: start T1 alone first (its own mic + speaker running
-    # simultaneously, with nothing else going on, but NOT yet bridged to T2) before T2 even
-    # opens. If T1 alone glitches here, that's this specific card's own full-duplex capability,
-    # independent of anything about the bridging logic.
-    print("\nStarting T1 alone (mic+speaker together, isolated diagnostic, not bridged yet)...")
-    t1.start()
-    print("Listen to T1 alone for a moment before T2 joins.")
+    # Staged startup, flipped for this test: start T2 alone first (its own mic + speaker
+    # running simultaneously, nothing else going on, not bridged to T1) before T1 even opens.
+    # We already confirmed T1 alone is clean in blocking mode - this checks whether T2 alone
+    # is equally clean, to isolate "T2's own hardware/connection" from "running both together".
+    print("\nStarting T2 alone (mic+speaker together, isolated diagnostic, not bridged yet)...")
+    t2.start()
+    print("Listen to T2 alone for a moment before T1 joins.")
     time.sleep(2.0)
 
-    print("\nStarting T2 and bridging both directions now (both sides ready to consume)...")
-    t2.start()
+    print("\nStarting T1 and bridging both directions now (both sides ready to consume)...")
+    t1.start()
     t1.connect(t2)  # T1's mic -> T2's speaker
     t2.connect(t1)  # T2's mic -> T1's speaker
 
