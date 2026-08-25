@@ -6,10 +6,14 @@ import os
 import struct
 import random
 import audioop
-from collections import deque
+import queue # <--- NEW: Crucial for syncing the mic and speaker!
 
 DEVICE_SAMPLE_RATE = 48000
 CHUNK_SIZE = 4096
+
+# Set this to 1.0 if the volume is already perfect with the sync fix, 
+# or keep it higher if you still need an extra kick!
+LIVE_CALL_VOLUME_BOOST = 4.0  
 
 running = True
 
@@ -39,16 +43,24 @@ def find_device_index(p: pyaudio.PyAudio, target_name: str):
 class LiveAudioBuffer:
     """Safely bridges audio between the independent Mic and Speaker threads."""
     def __init__(self):
-        self._queue = deque(maxlen=10) # Holds ~0.8 seconds of audio max
+        # queue.Queue handles thread locking and waiting automatically
+        self._queue = queue.Queue(maxsize=10) 
         
     def push(self, data: bytes):
-        self._queue.append(data)
+        # If the queue is full, drop the oldest audio to prevent lag
+        if self._queue.full():
+            try: self._queue.get_nowait() 
+            except queue.Empty: pass
+        self._queue.put(data)
         
     def pop(self, size: int) -> bytes:
-        if self._queue:
-            return self._queue.popleft()
-        # If the mic falls behind, return silence instead of crashing
-        return b'\x00' * (size * 2) 
+        try:
+            # THIS WAS THE MISSING LINK! 
+            # Wait up to 0.1 seconds for the mic to deliver the next chunk, 
+            # instead of instantly writing pure silence if the speaker is too fast.
+            return self._queue.get(timeout=0.1)
+        except queue.Empty:
+            return b'\x00' * (size * 2) 
 
 # --- Core Audio Classes ---
 class AudioOutputEngine:
@@ -118,13 +130,20 @@ def mic_reader_thread(name: str, device_index: int, destination_buffer: LiveAudi
     
     while running:
         try:
+            # 1. Read the audio
             data = stream.read(CHUNK_SIZE, exception_on_overflow=False)
-            destination_buffer.push(data)
             
-            # Print a visual volume meter every ~10 loops (approx 4 times a second)
+            # 2. DIGITAL AMPLIFIER
+            # Boost the volume right here before sending it to the speaker buffer
+            boosted_data = audioop.mul(data, 2, LIVE_CALL_VOLUME_BOOST)
+            
+            # 3. Push to the synced queue
+            destination_buffer.push(boosted_data)
+            
+            # Print a visual volume meter every ~10 loops
             loop_count += 1
             if loop_count % 10 == 0:
-                rms = audioop.rms(data, 2)
+                rms = audioop.rms(boosted_data, 2)
                 meter = "#" * min(int(rms / 100), 40) # Scale RMS to terminal width
                 print(f"{name} Mic Vol: {rms:5d} | {meter}")
                 
@@ -139,7 +158,7 @@ def mic_reader_thread(name: str, device_index: int, destination_buffer: LiveAudi
 # --- Main Test Runner ---
 def main():
     global running
-    print("--- DIGITAL CALL TEST SCRIPT (DECOUPLED) ---")
+    print("--- DIGITAL CALL TEST SCRIPT (DECOUPLED & SYNCED) ---")
     p = pyaudio.PyAudio()
     t1_idx = find_device_index(p, "T1")
     t2_idx = find_device_index(p, "T2")
