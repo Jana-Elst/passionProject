@@ -58,7 +58,6 @@ import re
 import struct
 import threading
 import select
-from collections import deque
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union, Any
 from enum import Enum
@@ -68,54 +67,6 @@ import serial
 import serial.tools.list_ports
 import pyaudio
 import wave
-
-try:
-    # Removed from the stdlib in Python 3.13 (PEP 594); pip install audioop-lts restores
-    # it under the same import name. Falls back to a pure-Python RMS if unavailable.
-    import audioop
-except ImportError:
-    audioop = None
-
-if 'imp' not in sys.modules:
-    try:
-        import imp  # noqa: F401 (removed in Python 3.12+)
-    except ModuleNotFoundError:
-        # The `speexdsp` PyPI package (unmaintained since 2018) ships a SWIG-generated
-        # wrapper that still does `import imp` just to load its compiled _speexdsp
-        # extension. Python 3.12 removed `imp` from the stdlib entirely, so on newer
-        # Python that import now crashes before speexdsp can even report a real error.
-        # This shim implements just the two calls that wrapper makes (find_module /
-        # load_module) in terms of importlib, so the real C extension still loads fine.
-        import types
-        import importlib.util
-        import importlib.machinery
-
-        def _imp_find_module(name, path=None):
-            spec = importlib.machinery.PathFinder().find_spec(name, path)
-            if spec is None or spec.origin is None:
-                raise ImportError(name)
-            # Must be a truthy, real file object: the SWIG wrapper only calls
-            # imp.load_module() when this is not None, and calls .close() on it after.
-            return open(spec.origin, 'rb'), spec.origin, ('', '', 0)
-
-        def _imp_load_module(name, file, pathname, description):
-            spec = importlib.util.spec_from_file_location(name, pathname)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            return module
-
-        _imp_shim = types.ModuleType('imp')
-        _imp_shim.find_module = _imp_find_module
-        _imp_shim.load_module = _imp_load_module
-        sys.modules['imp'] = _imp_shim
-
-try:
-    from speexdsp import EchoCanceller
-except ImportError as e:
-    # Needed for the digital intercom's acoustic echo cancellation.
-    # Install with: sudo apt install libspeexdsp-dev swig && pip install speexdsp
-    print(f"WARNING: speexdsp import failed ({e}) - running WITHOUT echo cancellation")
-    EchoCanceller = None
 
 from call_logger import get_logger
 
@@ -142,33 +93,6 @@ TIMING_GHOST_RING_REPEAT_MAX = 2400.0  # 40 minutes
 
 TIMING_GHOST_RING_DURATION_MIN = 30.0
 TIMING_GHOST_RING_DURATION_MAX = 60.0
-
-# Digital Intercom: the live mic->speaker bridge between T1 and T2 forms a closed loop
-# (each phone's own speaker output leaks back into its own mic, electrically and/or
-# acoustically). A gate alone can't fix this - real speech has to cross the same threshold
-# as the leaked echo, so it re-triggers the loop too. Instead, each phone runs an adaptive
-# echo canceller (speexdsp) that uses "what we just played into this phone's speaker" as a
-# reference to subtract the predicted echo out of "what this phone's mic just picked up",
-# before forwarding to the other side.
-#   - AEC_FRAME_SIZE: speexdsp processes audio in small blocks (must divide CHUNK_SIZE evenly).
-#   - AEC_FILTER_LENGTH: how many samples of echo "tail" it can model - needs to comfortably
-#     cover the speaker->mic loopback delay on this hardware, which includes real USB audio
-#     driver buffering latency on top of the near-instant electrical/acoustic leak, not just
-#     the leak itself. If the filter can't converge (interference persists / keeps resetting),
-#     raise this first - the true round-trip delay may be larger than it can currently model.
-AEC_FRAME_SIZE = 256
-AEC_FILTER_LENGTH = 16384
-
-# Residual noise gate (runs AFTER echo cancellation, which typically only attenuates rather
-# than perfectly eliminates echo): forwards audio only while it's above this RMS level, with
-# a short hangover so word endings aren't cut off. Tune on real hardware: raise if leftover
-# hum/echo still gets through, lower if quiet speech gets clipped.
-INTERCOM_SQUELCH_THRESHOLD = 400
-INTERCOM_HANGOVER_TIME = 0.3
-# Gate transitions ramp linearly over this many samples (instead of an instant on/off jump)
-# to avoid an audible click - only the transition edge itself needs to be smoothed, so this
-# stays tiny and cheap even in pure Python.
-INTERCOM_GATE_FADE_SAMPLES = 32
 
 PAUSE_AROUND_QUESTION_OR_TOPIC = 0.3
 
@@ -440,15 +364,13 @@ class AudioChannel:
         if not self.stream: return
         
         try:
-             label = f"Tone {generator.frequency}Hz" if isinstance(generator.frequency, (int, float)) else str(generator.frequency)
-
              with self.engine_lock:
                  self.active_audio_file = generator
-                 self.active_audio_file_path = label
+                 self.active_audio_file_path = f"Tone {generator.frequency}Hz"
                  self.stop_requested = False
                  self.is_playing = True
-
-             print(f"[{self.name}] Playing {label}...")
+            
+             print(f"[{self.name}] Playing Tone {generator.frequency}Hz...")
              
              start_time = time.time()
              while not stop_event.is_set():
@@ -500,78 +422,6 @@ class AudioChannel:
                 
         except Exception as e:
             print(f"Error recording on {self.name}: {e}")
-
-    def stream_to(self, destination: 'LiveAudioBuffer', own_playback_buffer: 'LiveAudioBuffer',
-                  stop_event: threading.Event,
-                  squelch_threshold: float = INTERCOM_SQUELCH_THRESHOLD,
-                  hangover_time: float = INTERCOM_HANGOVER_TIME):
-        """
-        Continuously reads mic input, cancels out this phone's own speaker echo, and pushes
-        the cleaned chunks into destination (digital intercom).
-
-        own_playback_buffer is whatever is currently being played into THIS phone's own
-        speaker (the far-end reference) - it leaks back into this phone's own mic (near-end),
-        electrically and/or acoustically, forming a closed loop with the other phone. An
-        adaptive echo canceller subtracts the predicted echo using that reference before
-        anything is forwarded. A residual noise gate on top (squelch_threshold + hangover_time)
-        mops up whatever the canceller doesn't fully attenuate.
-        """
-        stream = None
-        last_active_time = 0.0
-        gate_open = False  # tracks previous chunk's gate state, to fade only on transitions
-        frame_bytes = AEC_FRAME_SIZE * 2  # 16-bit mono
-
-        echo_canceller = None
-        if EchoCanceller is not None:
-            echo_canceller = EchoCanceller.create(AEC_FRAME_SIZE, AEC_FILTER_LENGTH, DEVICE_SAMPLE_RATE)
-        else:
-            print(f"[{self.name}] WARNING: speexdsp unavailable (see import warning at startup) - "
-                  f"running WITHOUT echo cancellation")
-
-        try:
-            stream = self.audio_system.open(format=pyaudio.paInt16,
-                                 channels=1,
-                                 rate=DEVICE_SAMPLE_RATE,
-                                 input=True,
-                                 input_device_index=self.device_index,
-                                 frames_per_buffer=CHUNK_SIZE)
-
-            print(f"[{self.name}] Live mic stream started (-> intercom bridge)")
-
-            while not stop_event.is_set():
-                near = stream.read(CHUNK_SIZE, exception_on_overflow=False)
-
-                if echo_canceller is not None:
-                    far = own_playback_buffer.pop_reference()
-                    cleaned = bytearray()
-                    for i in range(0, len(near), frame_bytes):
-                        cleaned.extend(echo_canceller.process(near[i:i + frame_bytes], far[i:i + frame_bytes]))
-                    data = bytes(cleaned)
-                else:
-                    data = near
-
-                now = time.time()
-                if chunk_rms(data) > squelch_threshold:
-                    last_active_time = now
-
-                new_gate_open = (now - last_active_time <= hangover_time)
-                if new_gate_open:
-                    if not gate_open:
-                        data = fade_edge(data, fade_in=True)  # gate just opened - ramp up
-                    destination.push(data)
-                elif gate_open:
-                    # gate just closed this chunk - ramp down before going silent, instead
-                    # of an instant amplitude jump (that's what actually causes the click).
-                    destination.push(fade_edge(data, fade_in=False))
-                gate_open = new_gate_open
-
-        except Exception as e:
-            print(f"[{self.name}] Live Mic Error: {e}")
-        finally:
-            if stream:
-                stream.stop_stream()
-                stream.close()
-            print(f"[{self.name}] Live mic stream stopped")
 
     # Close the whole audio stream. (used by ending the program)
     def close(self):
@@ -755,46 +605,8 @@ class DualSineWaveGenerator:
             
             if self.phase1 > 2 * math.pi: self.phase1 -= 2 * math.pi
             if self.phase2 > 2 * math.pi: self.phase2 -= 2 * math.pi
-
+            
         return bytes(output)
-
-#--- live audio bridge (digital intercom) ---
-class LiveAudioBuffer:
-    """
-    A thread-safe queue of fixed-size audio chunks, duck-typed like a generator
-    so it can be played via AudioChannel.play_generator(). One phone's mic thread
-    pushes chunks in (via AudioChannel.stream_to), the other phone's playback
-    engine pulls them out (via readframes) — this is how the digital intercom
-    bridges mic -> speaker between the two phones instead of using the relay.
-    """
-    def __init__(self, max_chunks: int = 6):
-        self._queue = deque(maxlen=max_chunks)  # oldest chunk dropped on overflow, caps latency
-        # Mirrors every chunk actually sent to the speaker, so this phone's OWN mic-capture
-        # thread can use it as the echo canceller's far-end reference (see AudioChannel.stream_to).
-        self._reference_queue = deque(maxlen=max_chunks)
-        self._lock = threading.Lock()
-        self.frequency = "LIVE intercom audio"  # for play_generator's log line
-
-    def getnchannels(self): return 1
-
-    def push(self, data: bytes):
-        with self._lock:
-            self._queue.append(data)
-
-    def readframes(self, n_frames: int) -> bytes:
-        # Must never return b"" - that means "end of file" to _engine_loop and would stop playback.
-        with self._lock:
-            chunk = self._queue.popleft() if self._queue else b'\x00\x00' * n_frames
-            self._reference_queue.append(chunk)
-            return chunk
-
-    def pop_reference(self) -> bytes:
-        """Returns the next chunk that was actually sent to the speaker (echo canceller far-end)."""
-        with self._lock:
-            if self._reference_queue:
-                return self._reference_queue.popleft()
-        return b'\x00\x00' * CHUNK_SIZE
-
 #------------------------ PHONE LOGIC ------------------------#
 class Phone:
     """Represents a physical phone unit (T1 or T2)."""
@@ -922,12 +734,6 @@ class Phone:
                     self.audio.play_generator(gen, stop_event, remaining)
                     return
 
-                elif cmd == "LIVE":
-                    # ("LIVE", live_audio_buffer) - plays indefinitely until stop_event is set
-                    live_buffer = file[1]
-                    self.audio.play_generator(live_buffer, stop_event, duration=None)
-                    return
-
             # Handle Filename
             path = f"{AUDIO_DIR}/{file}"
             if Path(path).exists():
@@ -1006,49 +812,25 @@ def get_playlist_duration(playlist: List[Union[str, Tuple[str, float], List]]) -
                 print(f"Error getting duration for {file}: {e}")
     return total_time
     
-def chunk_rms(data: bytes) -> float:
-    """Computes the RMS (loudness) level of a raw 16-bit PCM chunk."""
-    if not data:
-        return 0.0
-    if audioop is not None:
-        return audioop.rms(data, 2)  # 2 = bytes per sample (16-bit)
-
-    count = len(data) // 2
-    if count == 0:
-        return 0.0
-    shorts = struct.unpack(f"<{count}h", data)
-    sum_squares = sum(s**2 for s in shorts)
-    return math.sqrt(sum_squares / count)
-
-def fade_edge(data: bytes, fade_in: bool, sample_count: int = INTERCOM_GATE_FADE_SAMPLES) -> bytes:
-    """
-    Linearly ramps the first `sample_count` samples of a 16-bit mono chunk up (fade_in) or
-    down (fade_out). Used only at noise-gate transitions, so an instant amplitude jump
-    (which sounds like a click/pop) doesn't happen - the rest of the chunk is untouched.
-    """
-    n = min(sample_count, len(data) // 2)
-    if n <= 0:
-        return data
-    out = bytearray(data)
-    for i in range(n):
-        factor = (i / n) if fade_in else (1 - i / n)
-        idx = i * 2
-        val = struct.unpack_from('<h', out, idx)[0]
-        struct.pack_into('<h', out, idx, int(val * factor))
-    return bytes(out)
-
 def file_has_sound(filename: str, threshold: int = 500) -> bool:
     """Checks if a recording has sound above a certain RMS threshold."""
     path = f"{AUDIO_DIR}/{filename}"
     if not Path(path).exists(): return False
-
+    
     try:
             with wave.open(path, 'rb') as audio_file_reader:
                 while True:
                     data = audio_file_reader.readframes(CHUNK_SIZE)
                     if not data: break
-
-                    if chunk_rms(data) > threshold:
+                    
+                    count = len(data) // 2
+                    if count == 0: continue
+                    
+                    shorts = struct.unpack(f"<{count}h", data)
+                    sum_squares = sum(s**2 for s in shorts)
+                    rms = math.sqrt(sum_squares / count)
+                    
+                    if rms > threshold:
                         return True
     except Exception as e:
             print(f"Error checking sound in {filename}: {e}")
@@ -1453,53 +1235,18 @@ class ConnectedState(State):
 
 class ConversationState(State):
     def on_enter(self):
-        print("--- CONVERSATION LIVE (DIGITAL INTERCOM) ---")
-
-        # Each buffer is named for who hears it - fed by the OTHER phone's mic.
-        self.buffer_for_sender = LiveAudioBuffer()
-        self.buffer_for_receiver = LiveAudioBuffer()
-        self.mic_stop_event = threading.Event()
-        self.mic_threads = []
-
-        # Single play_async call per phone (click tone, then live audio) - calling
-        # play_async twice would self-interrupt via its internal stop_audio().
-        self.context.sender.play_async(AUDIO_CONFIG["click_tone"] + [("LIVE", self.buffer_for_sender)])
-        self.context.receiver.play_async(AUDIO_CONFIG["click_tone"] + [("LIVE", self.buffer_for_receiver)])
-        # No R1_OPEN - relay stays closed; audio is bridged digitally instead.
-
-        # Don't start mic capture (and therefore echo cancellation) until the click tone has
-        # actually finished and each phone's own LiveAudioBuffer is what's really playing.
-        # Starting immediately meant the echo canceller's far-end reference read as silence
-        # while the click tone was genuinely playing into the speaker - a real signal with no
-        # matching reference, which is exactly what was making the adaptive filter diverge.
-        # + a small margin: the tone's own playback loop polls in 0.05s steps and can run
-        # slightly past its nominal duration, so start a beat late rather than a beat early.
-        warmup = get_playlist_duration(AUDIO_CONFIG["click_tone"]) + 0.15
-        self.mic_start_timer = threading.Timer(warmup, self._start_mic_threads)
-        self.mic_start_timer.start()
-
-    def _start_mic_threads(self):
-        # Mic threads are owned by this state (not by Phone) since nothing else
-        # calls stop_audio() on sender/receiver while this state is active.
-        self.mic_threads = [
-            # args: (destination, own_playback_buffer, stop_event) - own_playback_buffer is
-            # this phone's own echo-cancellation reference (what's playing in its own speaker).
-            threading.Thread(target=self.context.sender.audio.stream_to,
-                              args=(self.buffer_for_receiver, self.buffer_for_sender, self.mic_stop_event), daemon=True),
-            threading.Thread(target=self.context.receiver.audio.stream_to,
-                              args=(self.buffer_for_sender, self.buffer_for_receiver, self.mic_stop_event), daemon=True),
-        ]
-        for t in self.mic_threads:
-            t.start()
+        print("--- CONVERSATION LIVE ---")
+        self.context.sender.play_async(AUDIO_CONFIG["click_tone"])
+        self.context.receiver.play_async(AUDIO_CONFIG["click_tone"])
+        
+        if self.context.main_serial:
+            self.context.main_serial.write(b"R1_OPEN\n")
 
     def on_exit(self):
-        self.mic_start_timer.cancel()
-        self.mic_stop_event.set()
-        for t in self.mic_threads:
-            t.join(timeout=1.0)
+        if self.context.main_serial:
+            self.context.main_serial.write(b"R1_CLOSE\n")
         self.context.sender.stop_audio()
         self.context.receiver.stop_audio()
-        # No R1_CLOSE needed - relay was never opened.
 
     def on_onhook(self, phone):
         return PostCallWaitState(self.context)
