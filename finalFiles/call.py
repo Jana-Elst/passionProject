@@ -6,10 +6,14 @@ import audioop
 import queue
 
 DEVICE_SAMPLE_RATE = 48000
-CHUNK_SIZE = 1024  # Callbacks can handle small chunks perfectly, drastically reducing latency!
+# 1024 frames = ~21ms per callback, which the Pi couldn't keep up with (constant
+# paInputOverflow on every single callback, for both phones). Larger chunks mean fewer,
+# less frequent callbacks - less total Python/GIL overhead per second - at the cost of
+# more latency. Trading some latency for actually keeping up in real time.
+CHUNK_SIZE = 4096  # ~85ms per callback
 VOLUME_BOOST = 2.0  # 2.0x volume boost (mics are already loud, so 4.0 was causing clipping noise)
-QUEUE_MAX_CHUNKS = 20
-PREFILL_CHUNKS = 5  # ~100ms of silence pushed in up front, so the speaker never starves early
+QUEUE_MAX_CHUNKS = 4  # each chunk is now ~85ms, so this still caps latency at ~340ms
+PREFILL_CHUNKS = 2  # a little silence up front so the speaker doesn't starve on the first callback
 
 # --- ALSA Device Finding Logic ---
 def get_alsa_card_index(target_name: str):
@@ -133,22 +137,25 @@ def main():
 
     t1 = PhoneAudio(p, t1_idx, "T1")
     t2 = PhoneAudio(p, t2_idx, "T2")
-    t1.connect(t2)  # T1's mic -> T2's speaker
-    t2.connect(t1)  # T2's mic -> T1's speaker
+    # NOT connected yet on purpose - see below. Connecting a mic to a peer whose speaker
+    # isn't running yet just backs up that peer's queue with stale audio nobody's draining,
+    # which then plays back as a delayed backlog once that peer finally starts.
 
     # Staged startup, on purpose: start T1 alone first (its own mic + speaker running
-    # simultaneously, with nothing else going on) before T2 even opens. If T1 alone glitches
-    # or goes silent here, that PROVES this specific card can't do simultaneous record+
-    # playback at the hardware/driver level - independent of anything about the bridging
-    # logic. If T1 stays clean alone but breaks once T2 joins, the problem is elsewhere
-    # (e.g. two cards contending for something), not per-device half-duplex.
-    print("\nStarting T1 alone (mic+speaker together, isolated diagnostic)...")
+    # simultaneously, with nothing else going on, but NOT yet bridged to T2) before T2 even
+    # opens. If T1 alone glitches or goes silent here, that PROVES this specific card can't
+    # do simultaneous record+playback at the hardware/driver level - independent of anything
+    # about the bridging logic. If T1 stays clean alone but breaks once T2 joins, the problem
+    # is elsewhere (e.g. two cards contending for something), not per-device half-duplex.
+    print("\nStarting T1 alone (mic+speaker together, isolated diagnostic, not bridged yet)...")
     t1.start()
     print("Watch/listen to T1 alone for a moment - any status flags or errors above are from T1's own full-duplex capability, before T2 is even involved.")
     time.sleep(2.0)
 
-    print("\nStarting T2 (bridge goes live both ways now)...")
+    print("\nStarting T2 and bridging both directions now (both sides ready to consume)...")
     t2.start()
+    t1.connect(t2)  # T1's mic -> T2's speaker
+    t2.connect(t1)  # T2's mic -> T1's speaker
 
     print("\n*** Call is live! ***")
     print("Press Ctrl+C to hang up.\n")
