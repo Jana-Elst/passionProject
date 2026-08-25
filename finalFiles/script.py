@@ -58,6 +58,7 @@ import re
 import struct
 import threading
 import select
+from collections import deque
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union, Any
 from enum import Enum
@@ -423,6 +424,31 @@ class AudioChannel:
         except Exception as e:
             print(f"Error recording on {self.name}: {e}")
 
+    def stream_to(self, destination: 'LiveAudioBuffer', stop_event: threading.Event):
+        """Continuously reads mic input and pushes raw chunks into destination (digital intercom)."""
+        stream = None
+        try:
+            stream = self.audio_system.open(format=pyaudio.paInt16,
+                                 channels=1,
+                                 rate=DEVICE_SAMPLE_RATE,
+                                 input=True,
+                                 input_device_index=self.device_index,
+                                 frames_per_buffer=CHUNK_SIZE)
+
+            print(f"[{self.name}] Live mic stream started (-> intercom bridge)")
+
+            while not stop_event.is_set():
+                data = stream.read(CHUNK_SIZE, exception_on_overflow=False)
+                destination.push(data)
+
+        except Exception as e:
+            print(f"[{self.name}] Live Mic Error: {e}")
+        finally:
+            if stream:
+                stream.stop_stream()
+                stream.close()
+            print(f"[{self.name}] Live mic stream stopped")
+
     # Close the whole audio stream. (used by ending the program)
     def close(self):
         self.running = False
@@ -605,8 +631,36 @@ class DualSineWaveGenerator:
             
             if self.phase1 > 2 * math.pi: self.phase1 -= 2 * math.pi
             if self.phase2 > 2 * math.pi: self.phase2 -= 2 * math.pi
-            
+
         return bytes(output)
+
+#--- live audio bridge (digital intercom) ---
+class LiveAudioBuffer:
+    """
+    A thread-safe queue of fixed-size audio chunks, duck-typed like a generator
+    so it can be played via AudioChannel.play_generator(). One phone's mic thread
+    pushes chunks in (via AudioChannel.stream_to), the other phone's playback
+    engine pulls them out (via readframes) — this is how the digital intercom
+    bridges mic -> speaker between the two phones instead of using the relay.
+    """
+    def __init__(self, max_chunks: int = 6):
+        self._queue = deque(maxlen=max_chunks)  # oldest chunk dropped on overflow, caps latency
+        self._lock = threading.Lock()
+        self.frequency = "LIVE"  # for play_generator's log line
+
+    def getnchannels(self): return 1
+
+    def push(self, data: bytes):
+        with self._lock:
+            self._queue.append(data)
+
+    def readframes(self, n_frames: int) -> bytes:
+        # Must never return b"" - that means "end of file" to _engine_loop and would stop playback.
+        with self._lock:
+            if self._queue:
+                return self._queue.popleft()
+        return b'\x00\x00' * n_frames
+
 #------------------------ PHONE LOGIC ------------------------#
 class Phone:
     """Represents a physical phone unit (T1 or T2)."""
@@ -732,6 +786,12 @@ class Phone:
                     
                     gen = DualSineWaveGenerator(f1, f2, DEVICE_SAMPLE_RATE)
                     self.audio.play_generator(gen, stop_event, remaining)
+                    return
+
+                elif cmd == "LIVE":
+                    # ("LIVE", live_audio_buffer) - plays indefinitely until stop_event is set
+                    live_buffer = file[1]
+                    self.audio.play_generator(live_buffer, stop_event, duration=None)
                     return
 
             # Handle Filename
@@ -1235,18 +1295,37 @@ class ConnectedState(State):
 
 class ConversationState(State):
     def on_enter(self):
-        print("--- CONVERSATION LIVE ---")
-        self.context.sender.play_async(AUDIO_CONFIG["click_tone"])
-        self.context.receiver.play_async(AUDIO_CONFIG["click_tone"])
-        
-        if self.context.main_serial:
-            self.context.main_serial.write(b"R1_OPEN\n")
+        print("--- CONVERSATION LIVE (DIGITAL INTERCOM) ---")
+
+        # Each buffer is named for who hears it - fed by the OTHER phone's mic.
+        self.buffer_for_sender = LiveAudioBuffer()
+        self.buffer_for_receiver = LiveAudioBuffer()
+
+        # Mic threads are owned by this state (not by Phone) since nothing else
+        # calls stop_audio() on sender/receiver while this state is active.
+        self.mic_stop_event = threading.Event()
+        self.mic_threads = [
+            threading.Thread(target=self.context.sender.audio.stream_to,
+                              args=(self.buffer_for_receiver, self.mic_stop_event), daemon=True),
+            threading.Thread(target=self.context.receiver.audio.stream_to,
+                              args=(self.buffer_for_sender, self.mic_stop_event), daemon=True),
+        ]
+        for t in self.mic_threads:
+            t.start()
+
+        # Single play_async call per phone (click tone, then live audio) - calling
+        # play_async twice would self-interrupt via its internal stop_audio().
+        self.context.sender.play_async(AUDIO_CONFIG["click_tone"] + [("LIVE", self.buffer_for_sender)])
+        self.context.receiver.play_async(AUDIO_CONFIG["click_tone"] + [("LIVE", self.buffer_for_receiver)])
+        # No R1_OPEN - relay stays closed; audio is bridged digitally instead.
 
     def on_exit(self):
-        if self.context.main_serial:
-            self.context.main_serial.write(b"R1_CLOSE\n")
+        self.mic_stop_event.set()
+        for t in self.mic_threads:
+            t.join(timeout=1.0)
         self.context.sender.stop_audio()
         self.context.receiver.stop_audio()
+        # No R1_CLOSE needed - relay was never opened.
 
     def on_onhook(self, phone):
         return PostCallWaitState(self.context)
