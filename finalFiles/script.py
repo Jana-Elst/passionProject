@@ -152,9 +152,12 @@ TIMING_GHOST_RING_DURATION_MAX = 60.0
 # before forwarding to the other side.
 #   - AEC_FRAME_SIZE: speexdsp processes audio in small blocks (must divide CHUNK_SIZE evenly).
 #   - AEC_FILTER_LENGTH: how many samples of echo "tail" it can model - needs to comfortably
-#     cover the speaker->mic loopback delay on this hardware. Raise if echo persists.
+#     cover the speaker->mic loopback delay on this hardware, which includes real USB audio
+#     driver buffering latency on top of the near-instant electrical/acoustic leak, not just
+#     the leak itself. If the filter can't converge (interference persists / keeps resetting),
+#     raise this first - the true round-trip delay may be larger than it can currently model.
 AEC_FRAME_SIZE = 256
-AEC_FILTER_LENGTH = 4096
+AEC_FILTER_LENGTH = 16384
 
 # Residual noise gate (runs AFTER echo cancellation, which typically only attenuates rather
 # than perfectly eliminates echo): forwards audio only while it's above this RMS level, with
@@ -1469,7 +1472,9 @@ class ConversationState(State):
         # Starting immediately meant the echo canceller's far-end reference read as silence
         # while the click tone was genuinely playing into the speaker - a real signal with no
         # matching reference, which is exactly what was making the adaptive filter diverge.
-        warmup = get_playlist_duration(AUDIO_CONFIG["click_tone"])
+        # + a small margin: the tone's own playback loop polls in 0.05s steps and can run
+        # slightly past its nominal duration, so start a beat late rather than a beat early.
+        warmup = get_playlist_duration(AUDIO_CONFIG["click_tone"]) + 0.15
         self.mic_start_timer = threading.Timer(warmup, self._start_mic_threads)
         self.mic_start_timer.start()
 
