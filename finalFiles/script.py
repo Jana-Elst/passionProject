@@ -95,6 +95,14 @@ TIMING_GHOST_RING_REPEAT_MAX = 2400.0  # 40 minutes
 TIMING_GHOST_RING_DURATION_MIN = 30.0
 TIMING_GHOST_RING_DURATION_MAX = 60.0
 
+# Digital Intercom Squelch: the live mic->speaker bridge between T1 and T2 forms a closed
+# loop (each phone's own speaker output can leak back into its own mic). Forwarding audio
+# only while it's above this RMS level (with a short hangover so word endings aren't cut
+# off) stops that loop from self-sustaining into feedback/howling. Tune on real hardware:
+# raise if background hum/noise still triggers it, lower if quiet speech gets clipped.
+INTERCOM_SQUELCH_THRESHOLD = 400
+INTERCOM_HANGOVER_TIME = 0.3
+
 PAUSE_AROUND_QUESTION_OR_TOPIC = 0.3
 
 #--- Tone Definitions (Type, Freq, Duration, [ModFreq, ModIdx]) ---
@@ -365,13 +373,15 @@ class AudioChannel:
         if not self.stream: return
         
         try:
+             label = f"Tone {generator.frequency}Hz" if isinstance(generator.frequency, (int, float)) else str(generator.frequency)
+
              with self.engine_lock:
                  self.active_audio_file = generator
-                 self.active_audio_file_path = f"Tone {generator.frequency}Hz"
+                 self.active_audio_file_path = label
                  self.stop_requested = False
                  self.is_playing = True
-            
-             print(f"[{self.name}] Playing Tone {generator.frequency}Hz...")
+
+             print(f"[{self.name}] Playing {label}...")
              
              start_time = time.time()
              while not stop_event.is_set():
@@ -424,9 +434,18 @@ class AudioChannel:
         except Exception as e:
             print(f"Error recording on {self.name}: {e}")
 
-    def stream_to(self, destination: 'LiveAudioBuffer', stop_event: threading.Event):
-        """Continuously reads mic input and pushes raw chunks into destination (digital intercom)."""
+    def stream_to(self, destination: 'LiveAudioBuffer', stop_event: threading.Event,
+                  squelch_threshold: float = INTERCOM_SQUELCH_THRESHOLD,
+                  hangover_time: float = INTERCOM_HANGOVER_TIME):
+        """
+        Continuously reads mic input and pushes raw chunks into destination (digital intercom).
+        Chunks are only forwarded while the signal is above squelch_threshold (plus a short
+        hangover afterwards). Without this, the mic->speaker->mic loop between the two phones
+        can self-sustain into audio feedback, since it needs no real speech to keep going once
+        it starts - gating out near-silent audio stops the loop from ever closing.
+        """
         stream = None
+        last_active_time = 0.0
         try:
             stream = self.audio_system.open(format=pyaudio.paInt16,
                                  channels=1,
@@ -439,7 +458,13 @@ class AudioChannel:
 
             while not stop_event.is_set():
                 data = stream.read(CHUNK_SIZE, exception_on_overflow=False)
-                destination.push(data)
+
+                now = time.time()
+                if chunk_rms(data) > squelch_threshold:
+                    last_active_time = now
+
+                if now - last_active_time <= hangover_time:
+                    destination.push(data)
 
         except Exception as e:
             print(f"[{self.name}] Live Mic Error: {e}")
@@ -646,7 +671,7 @@ class LiveAudioBuffer:
     def __init__(self, max_chunks: int = 6):
         self._queue = deque(maxlen=max_chunks)  # oldest chunk dropped on overflow, caps latency
         self._lock = threading.Lock()
-        self.frequency = "LIVE"  # for play_generator's log line
+        self.frequency = "LIVE intercom audio"  # for play_generator's log line
 
     def getnchannels(self): return 1
 
@@ -872,25 +897,27 @@ def get_playlist_duration(playlist: List[Union[str, Tuple[str, float], List]]) -
                 print(f"Error getting duration for {file}: {e}")
     return total_time
     
+def chunk_rms(data: bytes) -> float:
+    """Computes the RMS (loudness) level of a raw 16-bit PCM chunk."""
+    count = len(data) // 2
+    if count == 0:
+        return 0.0
+    shorts = struct.unpack(f"<{count}h", data)
+    sum_squares = sum(s**2 for s in shorts)
+    return math.sqrt(sum_squares / count)
+
 def file_has_sound(filename: str, threshold: int = 500) -> bool:
     """Checks if a recording has sound above a certain RMS threshold."""
     path = f"{AUDIO_DIR}/{filename}"
     if not Path(path).exists(): return False
-    
+
     try:
             with wave.open(path, 'rb') as audio_file_reader:
                 while True:
                     data = audio_file_reader.readframes(CHUNK_SIZE)
                     if not data: break
-                    
-                    count = len(data) // 2
-                    if count == 0: continue
-                    
-                    shorts = struct.unpack(f"<{count}h", data)
-                    sum_squares = sum(s**2 for s in shorts)
-                    rms = math.sqrt(sum_squares / count)
-                    
-                    if rms > threshold:
+
+                    if chunk_rms(data) > threshold:
                         return True
     except Exception as e:
             print(f"Error checking sound in {filename}: {e}")
