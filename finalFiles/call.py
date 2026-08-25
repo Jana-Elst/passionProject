@@ -3,11 +3,14 @@ import threading
 import time
 import re
 import os
+import audioop  # Used for ultra-fast mono-to-stereo conversion
 
 # --- CONFIGURATION ---
-RATE = 48000       # Matches your hardware limitation
-CHUNK = 1024       
+RATE = 48000
+CHUNK = 4096       
 FORMAT = pyaudio.paInt16
+IN_CHANNELS = 1    # Mic is Mono
+OUT_CHANNELS = 2   # Speaker is Stereo (to ensure it hits the correct wire)
 
 running = True
 
@@ -25,8 +28,7 @@ def get_alsa_card_index(target_name: str):
 
 def find_device_index(p: pyaudio.PyAudio, target_name: str):
     card_idx = get_alsa_card_index(target_name)
-    if card_idx is None:
-        return None
+    if card_idx is None: return None
     for i in range(p.get_device_count()):
         info = p.get_device_info_by_index(i)
         if f"hw:{card_idx}," in info.get('name', ''):
@@ -34,27 +36,20 @@ def find_device_index(p: pyaudio.PyAudio, target_name: str):
     return None
 
 def audio_bridge(in_stream, out_stream, bridge_name):
-    """Reads Mono from Mic, converts to Stereo, writes to Speaker."""
     print(f"[{bridge_name}] Bridge active.")
     while running:
         try:
-            # 1. Read Mono (1 channel)
+            # 1. Read Mono from Mic
             data = in_stream.read(CHUNK, exception_on_overflow=False)
             
-            # 2. Convert Mono to Stereo manually
-            # data is a string of bytes. Every 2 bytes is one 16-bit audio sample.
-            # We duplicate each sample so it plays equally in the Left and Right channels.
-            stereo_data = bytearray()
-            for i in range(0, len(data), 2):
-                sample = data[i:i+2]
-                stereo_data.extend(sample + sample)
+            # 2. Duplicate Mono into Left and Right Stereo channels
+            # 2 = 16-bit audio, 1, 1 = duplicate evenly to both left and right
+            stereo_data = audioop.tostereo(data, 2, 1, 1)
             
-            # 3. Write Stereo (2 channels)
-            out_stream.write(bytes(stereo_data))
-            
+            # 3. Write Stereo to Speaker
+            out_stream.write(stereo_data)
         except Exception as e:
-            if running: 
-                print(f"[{bridge_name}] Stream error: {e}")
+            if running: print(f"[{bridge_name}] Stream error: {e}")
             break
 
 def main():
@@ -62,39 +57,32 @@ def main():
     p = pyaudio.PyAudio()
 
     print("--- SIMPLE DIGITAL INTERCOM ---")
-    
     t1_idx = find_device_index(p, "T1")
     t2_idx = find_device_index(p, "T2")
 
     if t1_idx is None or t2_idx is None:
-        print("CRITICAL: Could not find 'T1' or 'T2'.")
+        print("CRITICAL: Could not find both 'T1' and 'T2' soundcards.")
         p.terminate()
         return
 
-    print(f"Found T1 at index {t1_idx} | Found T2 at index {t2_idx}")
-
     try:
-        # T1 Streams: Input is Mono (1), Output is Stereo (2)
-        t1_in = p.open(format=FORMAT, channels=1, rate=RATE, input=True,
+        # Open Streams (Note the separate IN and OUT channels)
+        t1_in = p.open(format=FORMAT, channels=IN_CHANNELS, rate=RATE, input=True,
                        input_device_index=t1_idx, frames_per_buffer=CHUNK)
-        t1_out = p.open(format=FORMAT, channels=2, rate=RATE, output=True,
+        t1_out = p.open(format=FORMAT, channels=OUT_CHANNELS, rate=RATE, output=True,
                         output_device_index=t1_idx, frames_per_buffer=CHUNK)
 
-        # T2 Streams: Input is Mono (1), Output is Stereo (2)
-        t2_in = p.open(format=FORMAT, channels=1, rate=RATE, input=True,
+        t2_in = p.open(format=FORMAT, channels=IN_CHANNELS, rate=RATE, input=True,
                        input_device_index=t2_idx, frames_per_buffer=CHUNK)
-        t2_out = p.open(format=FORMAT, channels=2, rate=RATE, output=True,
+        t2_out = p.open(format=FORMAT, channels=OUT_CHANNELS, rate=RATE, output=True,
                         output_device_index=t2_idx, frames_per_buffer=CHUNK)
-
     except Exception as e:
         print(f"Failed to open audio streams: {e}")
         p.terminate()
         return
 
     print("\nStreams successfully opened!")
-    print("WARNING: Keep the two handsets in separate rooms or you will get acoustic feedback (loud screeching).")
-    print("Starting cross-bridge... (Press Ctrl+C to stop)\n")
-
+    
     thread_t1_to_t2 = threading.Thread(target=audio_bridge, args=(t1_in, t2_out, "T1->T2"), daemon=True)
     thread_t2_to_t1 = threading.Thread(target=audio_bridge, args=(t2_in, t1_out, "T2->T1"), daemon=True)
 
@@ -102,10 +90,8 @@ def main():
     thread_t2_to_t1.start()
 
     try:
-        while True:
-            time.sleep(1)
+        while True: time.sleep(1)
     except KeyboardInterrupt:
-        print("\nShutting down...")
         running = False
 
     thread_t1_to_t2.join(timeout=1)
