@@ -6,15 +6,10 @@ import os
 import struct
 import random
 import audioop
-import queue # <--- NEW: Crucial for syncing the mic and speaker!
+import queue
 
 DEVICE_SAMPLE_RATE = 48000
 CHUNK_SIZE = 4096
-
-# Set this to 1.0 if the volume is already perfect with the sync fix, 
-# or keep it higher if you still need an extra kick!
-LIVE_CALL_VOLUME_BOOST = 4.0  
-
 running = True
 
 # --- ALSA Device Finding Logic ---
@@ -41,13 +36,10 @@ def find_device_index(p: pyaudio.PyAudio, target_name: str):
 
 # --- Elastic Buffer ---
 class LiveAudioBuffer:
-    """Safely bridges audio between the independent Mic and Speaker threads."""
     def __init__(self):
-        # queue.Queue handles thread locking and waiting automatically
-        self._queue = queue.Queue(maxsize=10) 
+        self._queue = queue.Queue(maxsize=20) 
         
     def push(self, data: bytes):
-        # If the queue is full, drop the oldest audio to prevent lag
         if self._queue.full():
             try: self._queue.get_nowait() 
             except queue.Empty: pass
@@ -55,16 +47,14 @@ class LiveAudioBuffer:
         
     def pop(self, size: int) -> bytes:
         try:
-            # THIS WAS THE MISSING LINK! 
-            # Wait up to 0.1 seconds for the mic to deliver the next chunk, 
-            # instead of instantly writing pure silence if the speaker is too fast.
-            return self._queue.get(timeout=0.1)
+            # THE MAGIC FIX: block=True forces the speaker to patiently wait for the 
+            # microphone data instead of blindly injecting silence gaps!
+            return self._queue.get(block=True, timeout=5.0)
         except queue.Empty:
             return b'\x00' * (size * 2) 
 
 # --- Core Audio Classes ---
 class AudioOutputEngine:
-    """Plays audio from a buffer to the speaker."""
     def __init__(self, name: str, device_index: int):
         self.name = name
         self.device_index = device_index
@@ -73,7 +63,7 @@ class AudioOutputEngine:
         
         self.stream = self.audio_system.open(
             format=pyaudio.paInt16,
-            channels=2,  # Stereo output matching your working play() script
+            channels=2,  
             rate=DEVICE_SAMPLE_RATE,
             output=True,
             output_device_index=self.device_index
@@ -94,8 +84,8 @@ class AudioOutputEngine:
 
         while running:
             if self.active_buffer:
+                # This will safely block until the mic thread provides the audio
                 raw_mono = self.active_buffer.pop(CHUNK_SIZE)
-                # Duplicate Mono to Stereo evenly (Left and Right)
                 stereo_data = audioop.tostereo(raw_mono, 2, 1, 1)
                 try:
                     self.stream.write(stereo_data)
@@ -114,11 +104,10 @@ class AudioOutputEngine:
         self.audio_system.terminate()
 
 def mic_reader_thread(name: str, device_index: int, destination_buffer: LiveAudioBuffer):
-    """Independent thread to read the microphone."""
     p = pyaudio.PyAudio()
     stream = p.open(
         format=pyaudio.paInt16,
-        channels=1, # Mono input matching your working record() script
+        channels=1, 
         rate=DEVICE_SAMPLE_RATE,
         input=True,
         input_device_index=device_index,
@@ -130,21 +119,16 @@ def mic_reader_thread(name: str, device_index: int, destination_buffer: LiveAudi
     
     while running:
         try:
-            # 1. Read the audio
             data = stream.read(CHUNK_SIZE, exception_on_overflow=False)
             
-            # 2. DIGITAL AMPLIFIER
-            # Boost the volume right here before sending it to the speaker buffer
-            boosted_data = audioop.mul(data, 2, LIVE_CALL_VOLUME_BOOST)
+            # Removed the 4x multiplier to stop the clipping noise! 
+            # Your vintage mic is plenty loud on its own.
+            destination_buffer.push(data)
             
-            # 3. Push to the synced queue
-            destination_buffer.push(boosted_data)
-            
-            # Print a visual volume meter every ~10 loops
             loop_count += 1
             if loop_count % 10 == 0:
-                rms = audioop.rms(boosted_data, 2)
-                meter = "#" * min(int(rms / 100), 40) # Scale RMS to terminal width
+                rms = audioop.rms(data, 2)
+                meter = "#" * min(int(rms / 100), 40)
                 print(f"{name} Mic Vol: {rms:5d} | {meter}")
                 
         except Exception as e:
@@ -158,7 +142,7 @@ def mic_reader_thread(name: str, device_index: int, destination_buffer: LiveAudi
 # --- Main Test Runner ---
 def main():
     global running
-    print("--- DIGITAL CALL TEST SCRIPT (DECOUPLED & SYNCED) ---")
+    print("--- DIGITAL CALL TEST SCRIPT (FINAL) ---")
     p = pyaudio.PyAudio()
     t1_idx = find_device_index(p, "T1")
     t2_idx = find_device_index(p, "T2")
@@ -181,13 +165,15 @@ def main():
     thread_m1.start()
     thread_m2.start()
 
+    # Create a 0.5-second buffer head-start so the mic is always safely ahead of the speaker
+    print("Building audio cushion to prevent skips...")
+    time.sleep(0.5)
+
     print("\n[ CROSS-CONNECTING AUDIO ]")
     t1_out.play_buffer(buf_t2_to_t1)
     t2_out.play_buffer(buf_t1_to_t2)
 
     print("\n*** Call is live! Pick up the phones and speak. ***")
-    print("Watch the terminal to see if the microphones are picking up sound.")
-    print("Press Ctrl+C to hang up.\n")
     
     try:
         while True:
