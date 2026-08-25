@@ -13,7 +13,12 @@ DEVICE_SAMPLE_RATE = 48000
 # 12000-frame (250ms) period for playback. Matching the smaller of those proven-working sizes
 # here didn't fix the overflow in PyAudio's callback API though - so buffer size wasn't it.
 CHUNK_SIZE = 6000  # 125ms per read/write - matches ALSA's own proven-clean capture period
-VOLUME_BOOST = 2.0  # 2.0x volume boost (mics are already loud, so 4.0 was causing clipping noise)
+# 1.0 = no artificial gain. Any boost > 1.0 compounds every time it goes around a closed
+# audio loop (mic -> speaker -> picked back up by the same/other mic -> mic again...) -
+# doubling on every pass hits 16-bit clipping within milliseconds, which is what "scratching"
+# actually was. 2.0 seemed safe when only tested as a single one-way pass, but is NOT safe
+# once the signal can loop back around, which is exactly what a live call does.
+VOLUME_BOOST = 1.0
 QUEUE_MAX_CHUNKS = 4  # each chunk is ~125ms, so this caps latency at ~500ms
 PREFILL_CHUNKS = 2  # a little silence up front so the speaker doesn't starve on the first read
 
