@@ -6,9 +6,12 @@ import os
 import struct
 import random
 import audioop
+from collections import deque
 
 DEVICE_SAMPLE_RATE = 48000
 CHUNK_SIZE = 4096
+
+running = True
 
 # --- ALSA Device Finding Logic ---
 def get_alsa_card_index(target_name: str):
@@ -32,131 +35,111 @@ def find_device_index(p: pyaudio.PyAudio, target_name: str):
             return i
     return None
 
+# --- Elastic Buffer ---
+class LiveAudioBuffer:
+    """Safely bridges audio between the independent Mic and Speaker threads."""
+    def __init__(self):
+        self._queue = deque(maxlen=10) # Holds ~0.8 seconds of audio max
+        
+    def push(self, data: bytes):
+        self._queue.append(data)
+        
+    def pop(self, size: int) -> bytes:
+        if self._queue:
+            return self._queue.popleft()
+        # If the mic falls behind, return silence instead of crashing
+        return b'\x00' * (size * 2) 
 
 # --- Core Audio Classes ---
-class AudioChannel:
-    """Simplified version of your continuous playback engine."""
-    def __init__(self, name: str, device_index: int = None):
+class AudioOutputEngine:
+    """Plays audio from a buffer to the speaker."""
+    def __init__(self, name: str, device_index: int):
         self.name = name
         self.device_index = device_index
         self.audio_system = pyaudio.PyAudio()
+        self.active_buffer = None
         
-        self.active_generator = None
-        self.is_playing = False
-        self.engine_lock = threading.Lock()
-        
-        self.running = True
-        self.stream = self._open_stream()
-        
+        self.stream = self.audio_system.open(
+            format=pyaudio.paInt16,
+            channels=2,  # Stereo output matching your working play() script
+            rate=DEVICE_SAMPLE_RATE,
+            output=True,
+            output_device_index=self.device_index
+        )
         self.thread = threading.Thread(target=self._engine_loop, daemon=True)
         self.thread.start()
 
-    def _open_stream(self):
-        try:
-            stream = self.audio_system.open(
-                format=pyaudio.paInt16,
-                channels=2,  # Outputting as Stereo 
-                rate=DEVICE_SAMPLE_RATE,
-                output=True,
-                output_device_index=self.device_index
-            )
-            print(f"[{self.name}] Output Engine Started.")
-            return stream
-        except Exception as e:
-            print(f"[{self.name}] Failed to start output: {e}")
-            return None
-
-    def play_generator(self, generator):
-        """Points the engine loop at the live microphone."""
-        with self.engine_lock:
-            self.active_generator = generator
-            self.is_playing = True
+    def play_buffer(self, audio_buffer: LiveAudioBuffer):
+        self.active_buffer = audio_buffer
 
     def _engine_loop(self):
-        # Generate Dithered Silence (prevent soundcard sleep/popping)
-        dither_buffer = bytearray(CHUNK_SIZE * 4)
-        for i in range(0, len(dither_buffer), 4):
+        dither = bytearray(CHUNK_SIZE * 4)
+        for i in range(0, len(dither), 4):
             val_l, val_r = random.randint(-1, 1), random.randint(-1, 1)
-            dither_buffer[i:i+2] = struct.pack('<h', val_l)
-            dither_buffer[i+2:i+4] = struct.pack('<h', val_r)
-        silence_chunk = bytes(dither_buffer)
+            dither[i:i+2] = struct.pack('<h', val_l)
+            dither[i+2:i+4] = struct.pack('<h', val_r)
+        silence = bytes(dither)
 
-        while self.running:
-            if self.stream is None:
-                time.sleep(0.1)
-                continue
-
-            gen = self.active_generator
-            if gen and self.is_playing:
-                # 1. Read Mono data from the Microphone Generator
-                raw_data = gen.readframes(CHUNK_SIZE)
-                
-                if not raw_data:
-                    self.stream.write(silence_chunk)
-                    continue
-                
-                # 2. Duplicate Mono into Stereo instantly using audioop
-                # (Fixes the issue of audio hitting the wrong jack pin)
-                stereo_data = audioop.tostereo(raw_data, 2, 1, 1)
-                
-                # 3. Write to Speaker
+        while running:
+            if self.active_buffer:
+                raw_mono = self.active_buffer.pop(CHUNK_SIZE)
+                # Duplicate Mono to Stereo evenly (Left and Right)
+                stereo_data = audioop.tostereo(raw_mono, 2, 1, 1)
                 try:
                     self.stream.write(stereo_data)
-                except Exception as e:
-                    print(f"[{self.name}] Engine Write Exception: {e}")
+                except Exception:
+                    pass
             else:
                 try:
-                    self.stream.write(silence_chunk)
+                    self.stream.write(silence)
                 except Exception:
                     pass
 
-    def stop(self):
-        with self.engine_lock:
-            self.is_playing = False
-            self.active_generator = None
-
     def close(self):
-        self.running = False
-        self.thread.join(timeout=1.0)
         if self.stream:
             self.stream.stop_stream()
             self.stream.close()
         self.audio_system.terminate()
 
-
-class LiveMicStream:
-    """Reads live microphone input to act as a digital audio source."""
-    def __init__(self, source_channel: AudioChannel):
-        self.source = source_channel
-        self.running = True
-        
-        self.stream = self.source.audio_system.open(
-            format=pyaudio.paInt16,
-            channels=1,  # Microphones are mono
-            rate=DEVICE_SAMPLE_RATE,
-            input=True,
-            input_device_index=self.source.device_index,
-            frames_per_buffer=CHUNK_SIZE
-        )
-        print(f"[{self.source.name}] Mic Stream Opened.")
-        
-    def readframes(self, n_frames: int) -> bytes:
-        if not self.running: return b""
+def mic_reader_thread(name: str, device_index: int, destination_buffer: LiveAudioBuffer):
+    """Independent thread to read the microphone."""
+    p = pyaudio.PyAudio()
+    stream = p.open(
+        format=pyaudio.paInt16,
+        channels=1, # Mono input matching your working record() script
+        rate=DEVICE_SAMPLE_RATE,
+        input=True,
+        input_device_index=device_index,
+        frames_per_buffer=CHUNK_SIZE
+    )
+    
+    print(f"[{name}] Mic opened. Listening...")
+    loop_count = 0
+    
+    while running:
         try:
-            return self.stream.read(n_frames, exception_on_overflow=False)
-        except Exception:
-            return b'\x00' * (n_frames * 2)
-
-    def stop(self):
-        self.running = False
-        if self.stream:
-            self.stream.stop_stream()
-            self.stream.close()
-
+            data = stream.read(CHUNK_SIZE, exception_on_overflow=False)
+            destination_buffer.push(data)
+            
+            # Print a visual volume meter every ~10 loops (approx 4 times a second)
+            loop_count += 1
+            if loop_count % 10 == 0:
+                rms = audioop.rms(data, 2)
+                meter = "#" * min(int(rms / 100), 40) # Scale RMS to terminal width
+                print(f"{name} Mic Vol: {rms:5d} | {meter}")
+                
+        except Exception as e:
+            print(f"[{name}] Mic error: {e}")
+            break
+            
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
 
 # --- Main Test Runner ---
 def main():
-    print("--- DIGITAL CALL TEST SCRIPT ---")
+    global running
+    print("--- DIGITAL CALL TEST SCRIPT (DECOUPLED) ---")
     p = pyaudio.PyAudio()
     t1_idx = find_device_index(p, "T1")
     t2_idx = find_device_index(p, "T2")
@@ -167,36 +150,36 @@ def main():
         return
 
     print("\n1. Initializing Output Engines...")
-    t1_channel = AudioChannel("T1", t1_idx)
-    t2_channel = AudioChannel("T2", t2_idx)
-    time.sleep(1) # Let the engines boot up
+    t1_out = AudioOutputEngine("T1_SPK", t1_idx)
+    t2_out = AudioOutputEngine("T2_SPK", t2_idx)
+    
+    buf_t1_to_t2 = LiveAudioBuffer()
+    buf_t2_to_t1 = LiveAudioBuffer()
 
     print("\n2. Initializing Microphone Inputs...")
-    t1_mic = LiveMicStream(t1_channel)
-    t2_mic = LiveMicStream(t2_channel)
+    thread_m1 = threading.Thread(target=mic_reader_thread, args=("T1", t1_idx, buf_t1_to_t2), daemon=True)
+    thread_m2 = threading.Thread(target=mic_reader_thread, args=("T2", t2_idx, buf_t2_to_t1), daemon=True)
+    thread_m1.start()
+    thread_m2.start()
 
     print("\n[ CROSS-CONNECTING AUDIO ]")
-    # T1's Engine plays T2's Mic
-    t1_channel.play_generator(t2_mic)
-    # T2's Engine plays T1's Mic
-    t2_channel.play_generator(t1_mic)
+    t1_out.play_buffer(buf_t2_to_t1)
+    t2_out.play_buffer(buf_t1_to_t2)
 
     print("\n*** Call is live! Pick up the phones and speak. ***")
-    print("Press Ctrl+C to hang up.")
+    print("Watch the terminal to see if the microphones are picking up sound.")
+    print("Press Ctrl+C to hang up.\n")
     
     try:
         while True:
             time.sleep(0.1)
     except KeyboardInterrupt:
         print("\nHanging up...")
+        running = False
 
-    # Cleanup
-    t1_channel.stop()
-    t2_channel.stop()
-    t1_mic.stop()
-    t2_mic.stop()
-    t1_channel.close()
-    t2_channel.close()
+    time.sleep(0.5)
+    t1_out.close()
+    t2_out.close()
     print("Done.")
 
 if __name__ == "__main__":
