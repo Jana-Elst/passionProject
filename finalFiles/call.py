@@ -4,16 +4,18 @@ import re
 import os
 import audioop
 import queue
+import threading
 
 DEVICE_SAMPLE_RATE = 48000
-# 1024 frames = ~21ms per callback, which the Pi couldn't keep up with (constant
-# paInputOverflow on every single callback, for both phones). Larger chunks mean fewer,
-# less frequent callbacks - less total Python/GIL overhead per second - at the cost of
-# more latency. Trading some latency for actually keeping up in real time.
-CHUNK_SIZE = 4096  # ~85ms per callback
+# Confirmed via raw `arecord`+`speaker-test` run simultaneously (no Python/PyAudio at all):
+# this hardware handles full-duplex cleanly with NO overrun/underrun, but only once ALSA was
+# left to pick its own buffer sizes - it chose a 6000-frame (125ms) period for capture and a
+# 12000-frame (250ms) period for playback. Matching the smaller of those proven-working sizes
+# here didn't fix the overflow in PyAudio's callback API though - so buffer size wasn't it.
+CHUNK_SIZE = 6000  # 125ms per read/write - matches ALSA's own proven-clean capture period
 VOLUME_BOOST = 2.0  # 2.0x volume boost (mics are already loud, so 4.0 was causing clipping noise)
-QUEUE_MAX_CHUNKS = 4  # each chunk is now ~85ms, so this still caps latency at ~340ms
-PREFILL_CHUNKS = 2  # a little silence up front so the speaker doesn't starve on the first callback
+QUEUE_MAX_CHUNKS = 4  # each chunk is ~125ms, so this caps latency at ~500ms
+PREFILL_CHUNKS = 2  # a little silence up front so the speaker doesn't starve on the first read
 
 # --- ALSA Device Finding Logic ---
 def get_alsa_card_index(target_name: str):
@@ -39,14 +41,17 @@ def find_device_index(p: pyaudio.PyAudio, target_name: str):
 
 class PhoneAudio:
     """
-    Owns ONE phone's mic input stream and speaker output stream (both callback-driven).
-    Call .connect(other) to wire this phone's mic into the other phone's speaker queue -
-    call it on both phones (each connected to the other) to get a two-way bridge.
+    Owns ONE phone's mic input stream and speaker output stream, using BLOCKING PyAudio I/O
+    in dedicated threads - NOT PortAudio's callback API.
 
-    IMPORTANT: a raised exception inside a PortAudio callback silently kills that stream -
-    PortAudio just stops calling it again, with nothing printed unless you catch and log it
-    yourself. That looks exactly like "the sound just stops" with no visible cause, so every
-    callback here is wrapped defensively and logs what actually happened.
+    Why: raw `arecord`/`speaker-test` proved this hardware handles simultaneous record+
+    playback cleanly (no overrun/underrun at all), and their verbose output showed they use
+    plain "RW_INTERLEAVED" ALSA access. PyAudio's callback API kept overflowing regardless of
+    buffer size, even when matched to the exact sizes ALSA proved clean with - and PortAudio's
+    callback mode typically prefers memory-mapped (MMAP) ALSA access for lower latency, which
+    cheap/generic USB Audio Class chips like this one are known to support poorly. This uses
+    plain blocking read()/write() calls in threads instead - the same mechanism the raw tools
+    used - to test whether that access-mode difference is the actual cause.
     """
     def __init__(self, p: pyaudio.PyAudio, device_index: int, name: str):
         self.name = name
@@ -61,71 +66,65 @@ class PhoneAudio:
 
         self.in_stream = None
         self.out_stream = None
+        self.stop_event = threading.Event()
+        self.mic_thread = None
+        self.spk_thread = None
 
     def connect(self, peer: 'PhoneAudio'):
         """Whatever THIS phone's mic captures gets pushed into peer's speaker queue."""
         self.peer = peer
 
-    def _mic_callback(self, in_data, frame_count, time_info, status):
-        if status:
-            print(f"[{self.name}] mic status flags: {status} (PortAudio over/underflow)")
-        try:
-            if self.peer is not None:
-                boosted = audioop.mul(in_data, 2, VOLUME_BOOST)
-                if not self.peer.out_queue.full():
-                    self.peer.out_queue.put_nowait(boosted)
-        except Exception as e:
-            print(f"[{self.name}] mic_callback error (would have killed the stream silently): {e}")
-        return (None, pyaudio.paContinue)
-
-    def _spk_callback(self, in_data, frame_count, time_info, status):
-        if status:
-            print(f"[{self.name}] speaker status flags: {status} (PortAudio over/underflow)")
-        try:
+    def _mic_loop(self):
+        while not self.stop_event.is_set():
             try:
-                mono_data = self.out_queue.get_nowait()
-            except queue.Empty:
-                mono_data = b'\x00' * (frame_count * 2)
+                data = self.in_stream.read(CHUNK_SIZE, exception_on_overflow=False)
+                if self.peer is not None:
+                    boosted = audioop.mul(data, 2, VOLUME_BOOST)
+                    if not self.peer.out_queue.full():
+                        self.peer.out_queue.put_nowait(boosted)
+            except Exception as e:
+                print(f"[{self.name}] mic_loop error: {e}")
 
-            # PortAudio requires the returned buffer to be EXACTLY frame_count frames.
-            # A queued chunk can occasionally be the wrong size (e.g. right at stream
-            # start/stop) - pad or trim rather than handing back a mismatched buffer,
-            # since that mismatch is another way this can silently die.
-            expected_bytes = frame_count * 2
-            if len(mono_data) != expected_bytes:
-                mono_data = (mono_data + b'\x00' * expected_bytes)[:expected_bytes]
-
-            stereo_data = audioop.tostereo(mono_data, 2, 1, 1)
-            return (stereo_data, pyaudio.paContinue)
-        except Exception as e:
-            print(f"[{self.name}] spk_callback error (would have killed the stream silently): {e}")
-            return (b'\x00' * (frame_count * 4), pyaudio.paContinue)
+    def _spk_loop(self):
+        while not self.stop_event.is_set():
+            try:
+                try:
+                    mono_data = self.out_queue.get(timeout=0.5)
+                except queue.Empty:
+                    mono_data = b'\x00' * (CHUNK_SIZE * 2)
+                stereo_data = audioop.tostereo(mono_data, 2, 1, 1)
+                self.out_stream.write(stereo_data)
+            except Exception as e:
+                print(f"[{self.name}] spk_loop error: {e}")
 
     def start(self):
         self.in_stream = self.p.open(
             format=pyaudio.paInt16, channels=1, rate=DEVICE_SAMPLE_RATE,
-            input=True, input_device_index=self.device_index, frames_per_buffer=CHUNK_SIZE,
-            stream_callback=self._mic_callback
+            input=True, input_device_index=self.device_index, frames_per_buffer=CHUNK_SIZE
         )
         self.out_stream = self.p.open(
             format=pyaudio.paInt16, channels=2, rate=DEVICE_SAMPLE_RATE,
-            output=True, output_device_index=self.device_index, frames_per_buffer=CHUNK_SIZE,
-            stream_callback=self._spk_callback
+            output=True, output_device_index=self.device_index, frames_per_buffer=CHUNK_SIZE
         )
-        self.in_stream.start_stream()
-        self.out_stream.start_stream()
-        print(f"[{self.name}] mic + speaker streams active simultaneously.")
+        self.mic_thread = threading.Thread(target=self._mic_loop, daemon=True)
+        self.spk_thread = threading.Thread(target=self._spk_loop, daemon=True)
+        self.mic_thread.start()
+        self.spk_thread.start()
+        print(f"[{self.name}] mic + speaker blocking threads active simultaneously.")
 
     def stop(self):
+        self.stop_event.set()
+        for t in (self.mic_thread, self.spk_thread):
+            if t is not None:
+                t.join(timeout=1.0)
         for s in (self.in_stream, self.out_stream):
             if s is not None:
-                if s.is_active():
-                    s.stop_stream()
+                s.stop_stream()
                 s.close()
 
 # --- Main Test Runner ---
 def main():
-    print("--- DIGITAL CALL TEST SCRIPT (CALLBACK API) ---")
+    print("--- DIGITAL CALL TEST SCRIPT (BLOCKING I/O) ---")
     p = pyaudio.PyAudio()
     t1_idx = find_device_index(p, "T1")
     t2_idx = find_device_index(p, "T2")
@@ -143,13 +142,11 @@ def main():
 
     # Staged startup, on purpose: start T1 alone first (its own mic + speaker running
     # simultaneously, with nothing else going on, but NOT yet bridged to T2) before T2 even
-    # opens. If T1 alone glitches or goes silent here, that PROVES this specific card can't
-    # do simultaneous record+playback at the hardware/driver level - independent of anything
-    # about the bridging logic. If T1 stays clean alone but breaks once T2 joins, the problem
-    # is elsewhere (e.g. two cards contending for something), not per-device half-duplex.
+    # opens. If T1 alone glitches here, that's this specific card's own full-duplex capability,
+    # independent of anything about the bridging logic.
     print("\nStarting T1 alone (mic+speaker together, isolated diagnostic, not bridged yet)...")
     t1.start()
-    print("Watch/listen to T1 alone for a moment - any status flags or errors above are from T1's own full-duplex capability, before T2 is even involved.")
+    print("Listen to T1 alone for a moment before T2 joins.")
     time.sleep(2.0)
 
     print("\nStarting T2 and bridging both directions now (both sides ready to consume)...")
