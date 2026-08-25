@@ -136,20 +136,17 @@ def main():
 
     t1 = PhoneAudio(p, t1_idx, "T1")
     t2 = PhoneAudio(p, t2_idx, "T2")
-    # NOT connected yet on purpose - see below. Connecting a mic to a peer whose speaker
-    # isn't running yet just backs up that peer's queue with stale audio nobody's draining,
-    # which then plays back as a delayed backlog once that peer finally starts.
 
-    # Staged startup, flipped for this test: start T2 alone first (its own mic + speaker
-    # running simultaneously, nothing else going on, not bridged to T1) before T1 even opens.
-    # We already confirmed T1 alone is clean in blocking mode - this checks whether T2 alone
-    # is equally clean, to isolate "T2's own hardware/connection" from "running both together".
-    print("\nStarting T2 alone (mic+speaker together, isolated diagnostic, not bridged yet)...")
+    # Staged startup: T2 self-connected first (its own mic looped back to its OWN speaker -
+    # so speaking into it actually produces something to listen to, unlike an earlier version
+    # of this test where the solo phase wasn't connected to anything and just played silence).
+    # Once T1 joins, we switch both to point at EACH OTHER instead of themselves.
+    t2.connect(t2)
+    print("\nStarting T2 alone, looped back to itself - speak into T2 and you should hear your own voice out of T2's speaker...")
     t2.start()
-    print("Listen to T2 alone for a moment before T1 joins.")
     time.sleep(2.0)
 
-    print("\nStarting T1 and bridging both directions now (both sides ready to consume)...")
+    print("\nStarting T1 and switching to a real two-way bridge (both sides ready to consume)...")
     t1.start()
     t1.connect(t2)  # T1's mic -> T2's speaker
     t2.connect(t1)  # T2's mic -> T1's speaker
