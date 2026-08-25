@@ -74,6 +74,8 @@ class PhoneAudio:
         self.stop_event = threading.Event()
         self.mic_thread = None
         self.spk_thread = None
+        self.underrun_count = 0  # speaker's queue was empty, had to play silence
+        self.overrun_count = 0   # this phone's queue was full, a captured chunk got dropped
 
     def connect(self, peer: 'PhoneAudio'):
         """Whatever THIS phone's mic captures gets pushed into peer's speaker queue."""
@@ -87,6 +89,9 @@ class PhoneAudio:
                     boosted = audioop.mul(data, 2, VOLUME_BOOST)
                     if not self.peer.out_queue.full():
                         self.peer.out_queue.put_nowait(boosted)
+                    else:
+                        self.peer.overrun_count += 1
+                        print(f"[{self.name}->{self.peer.name}] OVERRUN #{self.peer.overrun_count}: queue full, dropped a captured chunk")
             except Exception as e:
                 print(f"[{self.name}] mic_loop error: {e}")
 
@@ -96,6 +101,8 @@ class PhoneAudio:
                 try:
                     mono_data = self.out_queue.get(timeout=0.5)
                 except queue.Empty:
+                    self.underrun_count += 1
+                    print(f"[{self.name}] UNDERRUN #{self.underrun_count}: queue empty, playing silence")
                     mono_data = b'\x00' * (CHUNK_SIZE * 2)
                 stereo_data = audioop.tostereo(mono_data, 2, 1, 1)
                 self.out_stream.write(stereo_data)
