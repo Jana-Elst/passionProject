@@ -1455,10 +1455,27 @@ class ConversationState(State):
         # Each buffer is named for who hears it - fed by the OTHER phone's mic.
         self.buffer_for_sender = LiveAudioBuffer()
         self.buffer_for_receiver = LiveAudioBuffer()
+        self.mic_stop_event = threading.Event()
+        self.mic_threads = []
 
+        # Single play_async call per phone (click tone, then live audio) - calling
+        # play_async twice would self-interrupt via its internal stop_audio().
+        self.context.sender.play_async(AUDIO_CONFIG["click_tone"] + [("LIVE", self.buffer_for_sender)])
+        self.context.receiver.play_async(AUDIO_CONFIG["click_tone"] + [("LIVE", self.buffer_for_receiver)])
+        # No R1_OPEN - relay stays closed; audio is bridged digitally instead.
+
+        # Don't start mic capture (and therefore echo cancellation) until the click tone has
+        # actually finished and each phone's own LiveAudioBuffer is what's really playing.
+        # Starting immediately meant the echo canceller's far-end reference read as silence
+        # while the click tone was genuinely playing into the speaker - a real signal with no
+        # matching reference, which is exactly what was making the adaptive filter diverge.
+        warmup = get_playlist_duration(AUDIO_CONFIG["click_tone"])
+        self.mic_start_timer = threading.Timer(warmup, self._start_mic_threads)
+        self.mic_start_timer.start()
+
+    def _start_mic_threads(self):
         # Mic threads are owned by this state (not by Phone) since nothing else
         # calls stop_audio() on sender/receiver while this state is active.
-        self.mic_stop_event = threading.Event()
         self.mic_threads = [
             # args: (destination, own_playback_buffer, stop_event) - own_playback_buffer is
             # this phone's own echo-cancellation reference (what's playing in its own speaker).
@@ -1470,13 +1487,8 @@ class ConversationState(State):
         for t in self.mic_threads:
             t.start()
 
-        # Single play_async call per phone (click tone, then live audio) - calling
-        # play_async twice would self-interrupt via its internal stop_audio().
-        self.context.sender.play_async(AUDIO_CONFIG["click_tone"] + [("LIVE", self.buffer_for_sender)])
-        self.context.receiver.play_async(AUDIO_CONFIG["click_tone"] + [("LIVE", self.buffer_for_receiver)])
-        # No R1_OPEN - relay stays closed; audio is bridged digitally instead.
-
     def on_exit(self):
+        self.mic_start_timer.cancel()
         self.mic_stop_event.set()
         for t in self.mic_threads:
             t.join(timeout=1.0)
