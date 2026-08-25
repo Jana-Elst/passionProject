@@ -98,6 +98,12 @@ class PhoneAudio:
                         print(f"[{self.name}->{self.peer.name}] OVERRUN #{self.peer.overrun_count}: queue full, dropped a captured chunk")
             except Exception as e:
                 print(f"[{self.name}] mic_loop error: {e}")
+                if "Stream closed" in str(e):
+                    # An overflow (or similar) already killed the underlying stream - retrying
+                    # in a tight loop against a dead stream just spams identical errors forever.
+                    print(f"[{self.name}] mic stream is dead, stopping this loop.")
+                    break
+                time.sleep(0.05)  # brief backoff so a repeating error doesn't spin the CPU
 
     def _spk_loop(self):
         while not self.stop_event.is_set():
@@ -115,6 +121,10 @@ class PhoneAudio:
                 self.out_stream.write(stereo_data, exception_on_underflow=True)
             except Exception as e:
                 print(f"[{self.name}] spk_loop error: {e}")
+                if "Stream closed" in str(e):
+                    print(f"[{self.name}] speaker stream is dead, stopping this loop.")
+                    break
+                time.sleep(0.05)
 
     def start(self):
         self.in_stream = self.p.open(
