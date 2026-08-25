@@ -5,8 +5,8 @@ import re
 import os
 
 # --- CONFIGURATION ---
-RATE = 8000        # 8000Hz is perfect for vintage phones and saves CPU
-CHUNK = 1024       # Buffer size
+RATE = 48000       # Changed to 48000 to match your USB soundcard hardware limitations
+CHUNK = 1024       
 FORMAT = pyaudio.paInt16
 CHANNELS = 1       # Mono
 
